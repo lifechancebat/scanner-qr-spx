@@ -1,17 +1,22 @@
-export const initAudio = () => {
-  const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
-  if (!AudioContext) return null;
+// Singleton AudioContext — tránh tạo mới mỗi lần phát, trình duyệt giới hạn số context
+let audioCtx: AudioContext | null = null;
+
+function getAudioContext(): AudioContext | null {
+  const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+  if (!AudioContextClass) return null;
   
-  const ctx = new AudioContext();
-  if (ctx.state === 'suspended') {
-    ctx.resume();
+  if (!audioCtx) {
+    audioCtx = new AudioContextClass();
   }
-  return ctx;
-};
+  if (audioCtx.state === 'suspended') {
+    audioCtx.resume();
+  }
+  return audioCtx;
+}
 
 export const playBeep = () => {
   try {
-    const ctx = initAudio();
+    const ctx = getAudioContext();
     if (!ctx) return;
     
     const oscillator = ctx.createOscillator();
@@ -35,7 +40,7 @@ export const playBeep = () => {
 
 export const playTing = () => {
   try {
-    const ctx = initAudio();
+    const ctx = getAudioContext();
     if (!ctx) return;
     
     const oscillator = ctx.createOscillator();

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { ArrowLeft, History, Package, Check, Clock, Mic, MicOff } from 'lucide-react';
 import { ScanRecord } from '../types';
 
@@ -11,9 +11,16 @@ interface CurrentSessionProps {
 
 export default function CurrentSession({ scannedCode, onBack, onFinish, onHistory }: CurrentSessionProps) {
   const [scanTime] = useState<number>(Date.now());
-  const [timeLeft, setTimeLeft] = useState<number>(600); // 10 minutes in seconds
+  const [timeLeft, setTimeLeft] = useState<number>(600);
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef<any>(null);
+  const onFinishRef = useRef(onFinish);
+  const scannedCodeRef = useRef(scannedCode);
+  const scanTimeRef = useRef(scanTime);
+
+  useEffect(() => { onFinishRef.current = onFinish; }, [onFinish]);
+  useEffect(() => { scannedCodeRef.current = scannedCode; }, [scannedCode]);
+  useEffect(() => { scanTimeRef.current = scanTime; }, [scanTime]);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -66,19 +73,19 @@ export default function CurrentSession({ scannedCode, onBack, onFinish, onHistor
     }
   }, []);
 
-  const handleFinish = (autoFinished: boolean = false) => {
+  const handleFinish = useCallback((autoFinished: boolean = false) => {
     if (recognitionRef.current) {
       recognitionRef.current.stop();
     }
     const record: ScanRecord = {
       id: crypto.randomUUID(),
-      code: scannedCode,
-      scanTime: scanTime,
+      code: scannedCodeRef.current,
+      scanTime: scanTimeRef.current,
       finishTime: Date.now(),
       autoFinished
     };
-    onFinish(record);
-  };
+    onFinishRef.current(record);
+  }, []);
 
   const formatTime = (seconds: number) => {
     const m = Math.floor(seconds / 60);

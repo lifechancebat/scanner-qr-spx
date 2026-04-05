@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Key, Save, CheckCircle2, Plus, Trash2, Eye, EyeOff } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { ArrowLeft, Key, CheckCircle2, Plus, Trash2, Eye, EyeOff } from 'lucide-react';
 
 interface SettingsViewProps {
   onBack: () => void;

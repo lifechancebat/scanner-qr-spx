@@ -5,9 +5,20 @@ function getApiKeys(): string[] {
   const keysStr = localStorage.getItem('gemini_api_keys');
   let keys: string[] = [];
   if (keysStr) {
-    keys = keysStr.split('\n').map(k => k.trim()).filter(k => k.length > 0);
+    try {
+      const parsed = JSON.parse(keysStr);
+      if (Array.isArray(parsed)) {
+        keys = parsed.filter((k: string) => typeof k === 'string' && k.trim().length > 0);
+      } else {
+        // Fallback cho format cũ (newline separated)
+        keys = keysStr.split('\n').map(k => k.trim()).filter(k => k.length > 0);
+      }
+    } catch {
+      // Nếu không parse được JSON → xử lý như text thường
+      keys = keysStr.split('\n').map(k => k.trim()).filter(k => k.length > 0);
+    }
   }
-  // Always fallback to environment key if available
+  // Fallback to environment key if available
   if (process.env.GEMINI_API_KEY && !keys.includes(process.env.GEMINI_API_KEY)) {
     keys.push(process.env.GEMINI_API_KEY);
   }
@@ -29,13 +40,6 @@ async function withFallback<T>(operation: (ai: GoogleGenAI) => Promise<T>): Prom
     } catch (error: any) {
       lastError = error;
       console.warn("Lỗi với API Key hiện tại:", error);
-      // Check for rate limit (429) or quota errors
-      if (error?.status === 429 || error?.message?.includes('429') || error?.message?.includes('quota') || error?.message?.includes('exhausted')) {
-        console.log("Chuyển sang API Key tiếp theo...");
-        continue;
-      }
-      // If it's another type of error, we still might want to try the next key just in case,
-      // but usually we'd throw. For robustness, let's try the next key anyway.
       continue;
     }
   }
@@ -72,27 +76,4 @@ export async function analyzePackingPerformance(history: ScanRecord[]) {
     console.error("AI Error:", error);
     return "Xin lỗi, hệ thống AI đang bận hoặc hết lượt sử dụng. Vui lòng kiểm tra lại API Key.";
   }
-}
-
-export async function extractLabelInfo(base64Image: string, mimeType: string) {
-  return await withFallback(async (ai) => {
-    const prompt = `Trích xuất thông tin từ tem vận chuyển này và trả về định dạng JSON chính xác với các trường: "trackingNumber", "recipientName", "phone", "address". Nếu không thấy trường nào, để chuỗi rỗng. Chỉ trả về JSON, không có markdown.`;
-    const response = await ai.models.generateContent({
-      model: "gemini-3.1-flash-preview",
-      contents: [
-        { inlineData: { data: base64Image, mimeType } },
-        prompt
-      ],
-      config: {
-        responseMimeType: "application/json",
-      }
-    });
-    
-    try {
-      return JSON.parse(response.text || "{}");
-    } catch (e) {
-      console.error("Failed to parse JSON from AI", e);
-      return {};
-    }
-  });
 }

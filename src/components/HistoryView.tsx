@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { ArrowLeft, Search, Package, Clock, Calendar, Sparkles, User, MapPin, Phone, Download } from 'lucide-react';
+import { useState } from 'react';
+import { ArrowLeft, Search, Package, Clock, Calendar, Sparkles, User, Download } from 'lucide-react';
 import { format } from 'date-fns';
 import { ScanRecord } from '../types';
 import { analyzePackingPerformance } from '../services/ai';

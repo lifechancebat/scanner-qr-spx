@@ -1,30 +1,36 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { 
   BarChart2, 
   Truck, 
   Settings,
   Scan,
   KeyRound,
-  User
+  User,
+  Check
 } from 'lucide-react';
 import Scanner from './components/Scanner';
 import CurrentSession from './components/CurrentSession';
-import SessionComplete from './components/SessionComplete';
 import HistoryView from './components/HistoryView';
 import SettingsView from './components/SettingsView';
 import DashboardView from './components/DashboardView';
 import { ScanRecord } from './types';
 import { playBeep, playTing } from './utils/audio';
 import { db } from './services/firebase';
-import { collection, onSnapshot, query, orderBy, setDoc, doc, updateDoc } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy, setDoc, doc } from 'firebase/firestore';
 
-type ViewState = 'scanner' | 'session' | 'complete' | 'history' | 'settings' | 'dashboard';
+type ViewState = 'scanner' | 'session' | 'history' | 'settings' | 'dashboard';
+
+interface Toast {
+  show: boolean;
+  code: string;
+  duration: string;
+}
 
 export default function App() {
   const [currentView, setCurrentView] = useState<ViewState>('scanner');
   const [currentCode, setCurrentCode] = useState<string | null>(null);
-  const [lastRecord, setLastRecord] = useState<ScanRecord | null>(null);
   const [scanHistory, setScanHistory] = useState<ScanRecord[]>([]);
+  const [toast, setToast] = useState<Toast>({ show: false, code: '', duration: '' });
   
   // Custom Auth State
   const [isAuthenticatedLocal, setIsAuthenticatedLocal] = useState(false);
@@ -69,11 +75,11 @@ export default function App() {
     }
   };
 
-  const handleScan = (code: string) => {
+  const handleScan = useCallback((code: string) => {
     playBeep();
     setCurrentCode(code);
     setCurrentView('session');
-  };
+  }, []);
 
   const handleFinishSession = async (record: ScanRecord) => {
     playTing();
@@ -91,8 +97,19 @@ export default function App() {
       console.error("Failed to save record to Firestore", e);
     }
     
-    setLastRecord(finalRecord);
-    setCurrentView('complete');
+    // Tính thời gian cho toast
+    const durationSec = Math.round((finalRecord.finishTime - finalRecord.scanTime) / 1000);
+    const mins = Math.floor(durationSec / 60);
+    const secs = durationSec % 60;
+    const durationStr = mins > 0 ? `${mins}p ${secs}s` : `${secs}s`;
+    
+    // Toast + quay về scanner ngay lập tức (bỏ màn hoàn thành)
+    setToast({ show: true, code: finalRecord.code, duration: durationStr });
+    setCurrentView('scanner'); // ← Camera resume ngay, quét tiếp!
+    
+    setTimeout(() => {
+      setToast({ show: false, code: '', duration: '' });
+    }, 3000);
   };
 
   if (!isAuthenticatedLocal) {
@@ -149,49 +166,64 @@ export default function App() {
       {/* Mobile Container */}
       <div className="w-full max-w-md bg-white h-screen relative overflow-hidden shadow-2xl flex flex-col">
         
-        {currentView === 'dashboard' && (
-          <DashboardView 
-            history={scanHistory}
-            onBack={() => setCurrentView('scanner')} 
-          />
-        )}
+        {/* Scanner LUÔN MOUNTED — camera giữ sống, chỉ pause/resume */}
+        <Scanner 
+          onScan={handleScan} 
+          onHistory={() => setCurrentView('history')}
+          isActive={currentView === 'scanner'}
+        />
 
-        {currentView === 'scanner' && (
-          <Scanner 
-            onScan={handleScan} 
-            onHistory={() => setCurrentView('history')} 
-          />
+        {/* Các view khác hiển thị ĐÈ LÊN scanner */}
+        {currentView === 'dashboard' && (
+          <div className="absolute inset-0 z-20 flex flex-col bg-slate-50">
+            <DashboardView 
+              history={scanHistory}
+              onBack={() => setCurrentView('scanner')} 
+            />
+          </div>
         )}
         
         {currentView === 'session' && currentCode && (
-          <CurrentSession 
-            scannedCode={currentCode}
-            onBack={() => setCurrentView('scanner')} 
-            onFinish={handleFinishSession} 
-            onHistory={() => setCurrentView('history')}
-          />
-        )}
-
-        {currentView === 'complete' && (
-          <SessionComplete 
-            record={lastRecord}
-            onBack={() => setCurrentView('history')} 
-            onNewSession={() => setCurrentView('scanner')} 
-            onHistory={() => setCurrentView('history')}
-          />
+          <div className="absolute inset-0 z-20 flex flex-col bg-slate-50">
+            <CurrentSession 
+              scannedCode={currentCode}
+              onBack={() => setCurrentView('scanner')} 
+              onFinish={handleFinishSession} 
+              onHistory={() => setCurrentView('history')}
+            />
+          </div>
         )}
 
         {currentView === 'history' && (
-          <HistoryView 
-            history={scanHistory}
-            onBack={() => setCurrentView('scanner')} 
-          />
+          <div className="absolute inset-0 z-20 flex flex-col bg-slate-50">
+            <HistoryView 
+              history={scanHistory}
+              onBack={() => setCurrentView('scanner')} 
+            />
+          </div>
         )}
 
         {currentView === 'settings' && (
-          <SettingsView 
-            onBack={() => setCurrentView('scanner')} 
-          />
+          <div className="absolute inset-0 z-20 flex flex-col bg-slate-50">
+            <SettingsView 
+              onBack={() => setCurrentView('scanner')} 
+            />
+          </div>
+        )}
+
+        {/* Success Toast — hiện sau khi quét xong đơn */}
+        {toast.show && (
+          <div className="absolute top-5 left-4 right-4 z-[60] animate-[slideDown_0.3s_ease-out]">
+            <div className="bg-green-500 text-white rounded-2xl px-5 py-4 shadow-xl shadow-green-500/30 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-white/25 flex items-center justify-center shrink-0">
+                <Check size={22} strokeWidth={3} />
+              </div>
+              <div className="overflow-hidden flex-1">
+                <p className="font-bold text-sm">Đã lưu thành công!</p>
+                <p className="text-green-100 text-xs truncate mt-0.5">{toast.code} • {toast.duration}</p>
+              </div>
+            </div>
+          </div>
         )}
 
         {/* Bottom Navigation Bar */}
