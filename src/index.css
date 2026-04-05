@@ -1,5 +1,7 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 body {
   -webkit-touch-callout: none;
   -webkit-user-select: none;
@@ -11,6 +13,10 @@ body {
 input, textarea {
   -webkit-user-select: auto;
   user-select: auto;
+}
+
+html.dark {
+  color-scheme: dark;
 }
 
 @theme {

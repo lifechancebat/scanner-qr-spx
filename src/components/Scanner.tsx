@@ -134,10 +134,10 @@ export default function Scanner({
   return (
     <div className="flex-1 relative bg-slate-900 overflow-hidden flex flex-col">
       {/* Header */}
-      <header className="absolute top-0 w-full z-50 bg-white/80 backdrop-blur-md flex items-center justify-between px-4 h-14">
+      <header className="absolute top-0 w-full z-50 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md flex items-center justify-between px-4 h-14">
         <div className="flex items-center gap-2">
-          <h1 className="font-bold text-base text-slate-900">Quét Đơn</h1>
-          <div className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full flex items-center gap-1">
+          <h1 className="font-bold text-base text-slate-900 dark:text-white">Quét Đơn</h1>
+          <div className="bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-full flex items-center gap-1">
             <Package size={12} />
             <span className="text-xs font-bold">{todayCount}</span>
           </div>
@@ -185,9 +185,9 @@ export default function Scanner({
 
       {/* Prompt */}
       <div className="absolute top-20 left-0 w-full z-20 flex justify-center px-6">
-        <div className="bg-white/95 backdrop-blur-md px-5 py-2 rounded-full shadow-lg flex items-center gap-2">
+        <div className="bg-white/95 dark:bg-slate-800/95 backdrop-blur-md px-5 py-2 rounded-full shadow-lg flex items-center gap-2">
           <ScanLine className="text-blue-600" size={16} />
-          <p className="text-xs font-semibold text-slate-800">Đưa mã vạch vào khung hình</p>
+          <p className="text-xs font-semibold text-slate-800 dark:text-slate-200">Đưa mã vạch vào khung hình</p>
         </div>
       </div>
 

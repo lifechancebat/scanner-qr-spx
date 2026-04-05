@@ -8,7 +8,7 @@ import DashboardView from './components/DashboardView';
 import { ScanRecord } from './types';
 import { playBeep, playTing, playError } from './utils/audio';
 import { db } from './services/firebase';
-import { collection, onSnapshot, query, orderBy, setDoc, doc } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy, setDoc, doc, deleteDoc } from 'firebase/firestore';
 import { isToday } from 'date-fns';
 
 type ViewState = 'scanner' | 'session' | 'history' | 'settings' | 'dashboard';
@@ -23,19 +23,31 @@ export default function App() {
   const [resumeSignal, setResumeSignal] = useState(0);
   const toastTimer = useRef<ReturnType<typeof setTimeout>>();
 
-  // Auth
+  // Auth — không lưu plaintext password trong localStorage
   const [isAuthenticatedLocal, setIsAuthenticatedLocal] = useState(false);
   const [passcode, setPasscode] = useState('');
   const [employeeName, setEmployeeName] = useState('');
   const [loginError, setLoginError] = useState(false);
 
+  // Dark mode
+  const [darkMode, setDarkMode] = useState(() => {
+    const stored = localStorage.getItem('dark_mode');
+    if (stored !== null) return stored === 'true';
+    return window.matchMedia('(prefers-color-scheme: dark)').matches;
+  });
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', darkMode);
+    localStorage.setItem('dark_mode', String(darkMode));
+  }, [darkMode]);
+
+  const toggleDarkMode = useCallback(() => setDarkMode(prev => !prev), []);
+
   // O(1) duplicate check
   const scannedCodesSet = useMemo(() => new Set(scanHistory.map(r => r.code)), [scanHistory]);
 
-  // Đếm đơn hôm nay
   const todayCount = useMemo(() => scanHistory.filter(r => isToday(r.finishTime)).length, [scanHistory]);
 
-  // Ai đang hoạt động (derived from scan data, no extra Firestore collection)
   const activeUsers = useMemo(() => {
     const byUser = new Map<string, { count: number; lastScan: number }>();
     scanHistory.forEach(r => {
@@ -48,8 +60,7 @@ export default function App() {
       }
     });
     return Array.from(byUser.entries()).map(([name, d]) => ({
-      name,
-      count: d.count,
+      name, count: d.count,
       isRecent: Date.now() - d.lastScan < 5 * 60 * 1000
     }));
   }, [scanHistory]);
@@ -64,10 +75,11 @@ export default function App() {
     setQuickMode(prev => { const next = !prev; localStorage.setItem('quick_mode', String(next)); return next; });
   }, []);
 
+  // Auth check — chỉ lưu session flag, không lưu password
   useEffect(() => {
-    const p = localStorage.getItem('app_passcode');
+    const authed = localStorage.getItem('spx_authenticated');
     const n = localStorage.getItem('employee_name');
-    if (p === 'batbat113' && n) { setEmployeeName(n); setIsAuthenticatedLocal(true); }
+    if (authed === 'true' && n) { setEmployeeName(n); setIsAuthenticatedLocal(true); }
   }, []);
 
   useEffect(() => {
@@ -83,18 +95,24 @@ export default function App() {
 
   const handleLogin = () => {
     if (passcode === 'batbat113' && employeeName.trim()) {
-      localStorage.setItem('app_passcode', 'batbat113');
+      localStorage.setItem('spx_authenticated', 'true');
       localStorage.setItem('employee_name', employeeName.trim());
       setIsAuthenticatedLocal(true);
       setLoginError(false);
     } else { setLoginError(true); }
   };
 
-  const handleScan = useCallback((code: string) => {
-    // Rung phản hồi
-    navigator.vibrate?.(200);
+  const handleLogout = useCallback(() => {
+    localStorage.removeItem('spx_authenticated');
+    localStorage.removeItem('employee_name');
+    setIsAuthenticatedLocal(false);
+    setEmployeeName('');
+    setPasscode('');
+    setCurrentView('scanner');
+  }, []);
 
-    // Chống quét trùng
+  const handleScan = useCallback((code: string) => {
+    navigator.vibrate?.(200);
     if (scannedCodesSet.has(code)) {
       playError();
       navigator.vibrate?.([100, 100, 100]);
@@ -102,16 +120,11 @@ export default function App() {
       setResumeSignal(k => k + 1);
       return;
     }
-
     playBeep();
-
     if (quickMode) {
-      // Quét nhanh: lưu ngay, không vào phiên đóng gói
       const record: ScanRecord = {
-        id: crypto.randomUUID(),
-        code,
-        scanTime: Date.now(),
-        finishTime: Date.now(),
+        id: crypto.randomUUID(), code,
+        scanTime: Date.now(), finishTime: Date.now(),
         autoFinished: false,
         scannedBy: employeeName || 'Nhân viên',
         scannedByUid: 'shared-device'
@@ -131,44 +144,51 @@ export default function App() {
     playTing();
     navigator.vibrate?.([100, 50, 100]);
     if (!isAuthenticatedLocal) return;
-
     const finalRecord: ScanRecord = {
       ...record,
       scannedBy: employeeName || 'Nhân viên',
       scannedByUid: 'shared-device'
     };
-
     try { await setDoc(doc(db, 'scans', finalRecord.id), finalRecord); }
     catch (e) { console.error("Save failed", e); }
-
     const dur = Math.round((finalRecord.finishTime - finalRecord.scanTime) / 1000);
     const m = Math.floor(dur / 60), s = dur % 60;
     showToast('success', 'Đã lưu!', `${finalRecord.code} • ${m > 0 ? `${m}p ${s}s` : `${s}s`}`);
     setCurrentView('scanner');
   };
 
+  const handleDeleteScan = useCallback(async (id: string) => {
+    try {
+      await deleteDoc(doc(db, 'scans', id));
+      showToast('success', 'Đã xóa!', 'Đơn hàng đã được xóa khỏi lịch sử.');
+    } catch (e) {
+      console.error("Delete failed", e);
+      showToast('error', 'Lỗi!', 'Không thể xóa đơn hàng.');
+    }
+  }, [showToast]);
+
   if (!isAuthenticatedLocal) {
     return (
-      <div className="min-h-screen bg-slate-100 flex justify-center font-sans text-slate-900">
-        <div className="w-full max-w-md bg-white h-screen relative overflow-hidden shadow-2xl flex flex-col items-center justify-center p-6 text-center">
-          <div className="w-20 h-20 bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center mb-6">
+      <div className="min-h-screen bg-slate-100 dark:bg-slate-950 flex justify-center font-sans text-slate-900 dark:text-slate-100">
+        <div className="w-full max-w-md bg-white dark:bg-slate-900 h-screen relative overflow-hidden shadow-2xl flex flex-col items-center justify-center p-6 text-center">
+          <div className="w-20 h-20 bg-blue-100 dark:bg-blue-900/40 text-blue-600 rounded-2xl flex items-center justify-center mb-6">
             <Scan size={40} />
           </div>
-          <h1 className="text-2xl font-bold text-slate-900 mb-2">Quét Đơn Hàng</h1>
-          <p className="text-slate-500 mb-8 text-sm">Nhập tên và mã truy cập kho để bắt đầu.</p>
+          <h1 className="text-2xl font-bold mb-2">Quét Đơn Hàng</h1>
+          <p className="text-slate-500 dark:text-slate-400 mb-8 text-sm">Nhập tên và mã truy cập kho để bắt đầu.</p>
           <div className="w-full space-y-4 mb-6">
             <div className="relative">
               <User className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
               <input type="text" placeholder="Tên nhân viên (VD: Tuấn)" value={employeeName}
                 onChange={e => setEmployeeName(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl py-4 pl-12 pr-4 text-sm font-medium focus:ring-2 focus:ring-blue-500 outline-none" />
+                className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl py-4 pl-12 pr-4 text-sm font-medium focus:ring-2 focus:ring-blue-500 outline-none" />
             </div>
             <div className="relative">
               <KeyRound className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
               <input type="password" placeholder="Mã truy cập" value={passcode}
                 onChange={e => setPasscode(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && handleLogin()}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl py-4 pl-12 pr-4 text-sm font-medium focus:ring-2 focus:ring-blue-500 outline-none" />
+                className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl py-4 pl-12 pr-4 text-sm font-medium focus:ring-2 focus:ring-blue-500 outline-none" />
             </div>
           </div>
           {loginError && <p className="text-red-500 text-sm font-medium mb-4">Sai mã hoặc chưa nhập tên!</p>}
@@ -182,45 +202,36 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-100 flex justify-center font-sans text-slate-900 selection:bg-blue-200">
-      <div className="w-full max-w-md bg-white h-screen relative overflow-hidden shadow-2xl flex flex-col">
+    <div className="min-h-screen bg-slate-100 dark:bg-slate-950 flex justify-center font-sans text-slate-900 dark:text-slate-100 selection:bg-blue-200">
+      <div className="w-full max-w-md bg-white dark:bg-slate-900 h-screen relative overflow-hidden shadow-2xl flex flex-col">
 
-        {/* Scanner LUÔN SỐNG */}
-        <Scanner
-          onScan={handleScan}
-          onHistory={() => setCurrentView('history')}
-          isActive={currentView === 'scanner'}
-          resumeSignal={resumeSignal}
-          todayCount={todayCount}
-          quickMode={quickMode}
-          onToggleQuickMode={toggleQuickMode}
-          activeUsers={activeUsers}
-        />
+        <Scanner onScan={handleScan} onHistory={() => setCurrentView('history')}
+          isActive={currentView === 'scanner'} resumeSignal={resumeSignal}
+          todayCount={todayCount} quickMode={quickMode}
+          onToggleQuickMode={toggleQuickMode} activeUsers={activeUsers} />
 
-        {/* Views overlay */}
         {currentView === 'dashboard' && (
-          <div className="absolute inset-0 z-20 flex flex-col bg-slate-50">
+          <div className="absolute inset-0 z-20 flex flex-col bg-slate-50 dark:bg-slate-900">
             <DashboardView history={scanHistory} onBack={() => setCurrentView('scanner')} />
           </div>
         )}
         {currentView === 'session' && currentCode && (
-          <div className="absolute inset-0 z-20 flex flex-col bg-slate-50">
+          <div className="absolute inset-0 z-20 flex flex-col bg-slate-50 dark:bg-slate-900">
             <CurrentSession scannedCode={currentCode} onBack={() => setCurrentView('scanner')}
               onFinish={handleFinishSession} onHistory={() => setCurrentView('history')} />
           </div>
         )}
         {currentView === 'history' && (
-          <div className="absolute inset-0 z-20 flex flex-col bg-slate-50">
-            <HistoryView history={scanHistory} onBack={() => setCurrentView('scanner')} />
+          <div className="absolute inset-0 z-20 flex flex-col bg-slate-50 dark:bg-slate-900">
+            <HistoryView history={scanHistory} onBack={() => setCurrentView('scanner')} onDelete={handleDeleteScan} />
           </div>
         )}
         {currentView === 'settings' && (
-          <div className="absolute inset-0 z-20 flex flex-col bg-slate-50">
-            <SettingsView onBack={() => setCurrentView('scanner')} />
+          <div className="absolute inset-0 z-20 flex flex-col bg-slate-50 dark:bg-slate-900">
+            <SettingsView onBack={() => setCurrentView('scanner')} darkMode={darkMode} onToggleDarkMode={toggleDarkMode} onLogout={handleLogout} />
           </div>
         )}
 
-        {/* Toast */}
         {toast.show && (
           <div className="absolute top-5 left-4 right-4 z-[60] animate-[slideDown_0.3s_ease-out]">
             <div className={`rounded-2xl px-5 py-4 shadow-xl flex items-center gap-3 ${toast.type === 'success' ? 'bg-green-500 text-white shadow-green-500/30' : 'bg-red-500 text-white shadow-red-500/30'}`}>
@@ -235,8 +246,7 @@ export default function App() {
           </div>
         )}
 
-        {/* Nav */}
-        <nav className="absolute bottom-0 w-full z-50 bg-white/80 backdrop-blur-xl border-t border-slate-100 flex justify-around items-center px-2 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-2">
+        <nav className="absolute bottom-0 w-full z-50 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-t border-slate-100 dark:border-slate-800 flex justify-around items-center px-2 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-2">
           {([
             { view: 'dashboard' as ViewState, icon: BarChart2, label: 'Thống Kê' },
             { view: 'scanner' as ViewState, icon: Scan, label: 'Quét' },
@@ -244,8 +254,8 @@ export default function App() {
             { view: 'settings' as ViewState, icon: Settings, label: 'Cài Đặt' },
           ]).map(({ view, icon: Icon, label }) => (
             <button key={view} onClick={() => setCurrentView(view)}
-              className={`flex flex-col items-center justify-center rounded-2xl px-4 py-2 active:scale-95 transition-all duration-200 ${currentView === view ? 'text-blue-600' : 'text-slate-400 hover:text-slate-600'}`}>
-              <div className={`p-1.5 rounded-xl mb-1 ${currentView === view ? 'bg-blue-50' : 'bg-transparent'}`}>
+              className={`flex flex-col items-center justify-center rounded-2xl px-4 py-2 active:scale-95 transition-all duration-200 ${currentView === view ? 'text-blue-600' : 'text-slate-400 dark:text-slate-500 hover:text-slate-600'}`}>
+              <div className={`p-1.5 rounded-xl mb-1 ${currentView === view ? 'bg-blue-50 dark:bg-blue-900/30' : 'bg-transparent'}`}>
                 <Icon size={22} strokeWidth={currentView === view ? 2.5 : 2} />
               </div>
               <span className={`text-[10px] uppercase tracking-wider ${currentView === view ? 'font-bold' : 'font-semibold'}`}>{label}</span>
