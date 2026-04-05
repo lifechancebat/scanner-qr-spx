@@ -202,7 +202,7 @@ export default function Scanner({
       </div>
 
       {/* Bottom bar: Quick mode toggle + active users */}
-      <div className="absolute bottom-[calc(env(safe-area-inset-bottom)+4.5rem)] left-0 w-full z-20 px-4 flex items-center justify-between gap-3">
+      <div className="absolute bottom-[calc(env(safe-area-inset-bottom)+6.5rem)] left-0 w-full z-20 px-4 flex items-center justify-between gap-3">
         {/* Quick mode toggle */}
         <button 
           onClick={onToggleQuickMode}

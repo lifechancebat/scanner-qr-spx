@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ArrowLeft, Search, Package, Clock, Calendar, Sparkles, User, Download, Trash2, X } from 'lucide-react';
+import { ArrowLeft, Search, Package, Clock, Calendar, Sparkles, User, Download, Trash2, X, Play, Copy, Video, AlertCircle } from 'lucide-react';
 import { format, isSameDay } from 'date-fns';
 import { ScanRecord } from '../types';
 import { analyzePackingPerformance } from '../services/ai';
@@ -10,12 +10,44 @@ interface HistoryViewProps {
   onDelete: (id: string) => void;
 }
 
+interface CameraConfig {
+  ip: string; port: string; username: string; password: string; urlFormat: '1' | '2';
+}
+
+// Chuyển timestamp (ms) → UTC string format Dahua: YYYYMMDDTHHMMSSz
+const toRtspTime = (ts: number): string => {
+  const d = new Date(ts);
+  const p = (n: number) => n.toString().padStart(2, '0');
+  return `${d.getUTCFullYear()}${p(d.getUTCMonth()+1)}${p(d.getUTCDate())}T${p(d.getUTCHours())}${p(d.getUTCMinutes())}${p(d.getUTCSeconds())}Z`;
+};
+
+const buildVlcUrl = (cfg: CameraConfig, startTs: number, endTs: number): { vlc: string; rtsp: string } => {
+  const start = toRtspTime(startTs);
+  const end   = toRtspTime(endTs);
+  const auth  = `rtsp://${encodeURIComponent(cfg.username)}:${encodeURIComponent(cfg.password)}@${cfg.ip}:${cfg.port || '554'}`;
+  const path  = cfg.urlFormat === '2'
+    ? `/Streaming/tracks/101?starttime=${start}&endtime=${end}`
+    : `/cam/playback?starttime=${start}&endtime=${end}`;
+  const rtsp = auth + path;
+  return { vlc: `vlc://${rtsp}`, rtsp };
+};
+
 export default function HistoryView({ history, onBack, onDelete }: HistoryViewProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [aiInsight, setAiInsight] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string>('');
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const cameraConfig: CameraConfig | null = (() => {
+    try {
+      const s = localStorage.getItem('dahua_camera_config');
+      if (!s) return null;
+      const c = JSON.parse(s) as CameraConfig;
+      return c.ip && c.password ? c : null;
+    } catch { return null; }
+  })();
 
   const filteredHistory = history.filter(record => {
     const term = searchTerm.toLowerCase();
@@ -198,6 +230,42 @@ export default function HistoryView({ history, onBack, onDelete }: HistoryViewPr
                     <div className="flex items-center gap-1 text-[10px] text-slate-400 mt-1">
                       <User size={12} />
                       <span>Người quét: {record.scannedBy}</span>
+                    </div>
+                  )}
+
+                  {/* Video playback button */}
+                  {cameraConfig ? (() => {
+                    const urls = buildVlcUrl(cameraConfig, record.scanTime, record.finishTime);
+                    return (
+                      <div className="flex gap-2 pt-2 border-t border-slate-50 dark:border-slate-700 mt-1">
+                        <a
+                          href={urls.vlc}
+                          className="flex-1 flex items-center justify-center gap-1.5 bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold py-2.5 rounded-xl active:scale-95 transition-all shadow-sm shadow-teal-500/20"
+                        >
+                          <Play size={14} />
+                          Xem Video (VLC)
+                        </a>
+                        <button
+                          onClick={() => {
+                            navigator.clipboard.writeText(urls.rtsp);
+                            setCopiedId(record.id);
+                            setTimeout(() => setCopiedId(null), 2000);
+                          }}
+                          title="Copy RTSP URL"
+                          className={`flex items-center justify-center px-3 rounded-xl text-xs font-bold transition-all active:scale-95 ${
+                            copiedId === record.id
+                              ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                              : 'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400'
+                          }`}
+                        >
+                          <Copy size={14} />
+                        </button>
+                      </div>
+                    );
+                  })() : (
+                    <div className="flex items-center gap-1.5 text-[10px] text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 px-3 py-2 rounded-lg mt-1">
+                      <AlertCircle size={12} />
+                      <span>Chưa cấu hình camera. Vào <strong>Cài Đặt → Camera Dahua</strong>.</span>
                     </div>
                   )}
                 </div>

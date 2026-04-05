@@ -1,11 +1,19 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft, Key, CheckCircle2, Plus, Trash2, Eye, EyeOff, Moon, Sun, Download, LogOut, Smartphone } from 'lucide-react';
+import { ArrowLeft, Key, CheckCircle2, Plus, Trash2, Eye, EyeOff, Moon, Sun, Download, LogOut, Smartphone, Camera, Save, ChevronDown } from 'lucide-react';
 
 interface SettingsViewProps {
   onBack: () => void;
   darkMode: boolean;
   onToggleDarkMode: () => void;
   onLogout: () => void;
+}
+
+interface CameraConfig {
+  ip: string;
+  port: string;
+  username: string;
+  password: string;
+  urlFormat: '1' | '2';
 }
 
 export default function SettingsView({ onBack, darkMode, onToggleDarkMode, onLogout }: SettingsViewProps) {
@@ -15,6 +23,12 @@ export default function SettingsView({ onBack, darkMode, onToggleDarkMode, onLog
   const [showNewKey, setShowNewKey] = useState(false);
   const [installPrompt, setInstallPrompt] = useState<any>(null);
   const [isInstalled, setIsInstalled] = useState(false);
+  const [showCamPass, setShowCamPass] = useState(false);
+  const [camSaved, setCamSaved] = useState(false);
+  const [cameraConfig, setCameraConfig] = useState<CameraConfig>(() => {
+    const saved = localStorage.getItem('dahua_camera_config');
+    return saved ? JSON.parse(saved) : { ip: '', port: '554', username: 'admin', password: '', urlFormat: '1' };
+  });
 
   useEffect(() => {
     const keysStr = localStorage.getItem('gemini_api_keys');
@@ -122,6 +136,105 @@ export default function SettingsView({ onBack, darkMode, onToggleDarkMode, onLog
               className={`relative w-14 h-8 rounded-full transition-colors duration-300 ${darkMode ? 'bg-indigo-600' : 'bg-slate-200'}`}>
               <div className={`absolute top-1 w-6 h-6 bg-white rounded-full shadow-md transition-transform duration-300 ${darkMode ? 'translate-x-7' : 'translate-x-1'}`} />
             </button>
+          </div>
+        </div>
+
+        {/* Dahua Camera Config */}
+        <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-slate-100 dark:border-slate-700">
+          <div className="flex items-center gap-2 mb-1">
+            <Camera className="text-teal-600" size={20} />
+            <h2 className="font-bold text-slate-900 dark:text-white">Camera Dahua</h2>
+          </div>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mb-4 leading-relaxed">
+            Cấu hình để xem lại video đóng hàng trực tiếp qua VLC.
+          </p>
+
+          <div className="flex flex-col gap-3">
+            {/* IP + Port */}
+            <div className="flex gap-2">
+              <div className="flex-1">
+                <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1 block">Địa chỉ IP</label>
+                <input
+                  type="text" placeholder="192.168.1.108"
+                  value={cameraConfig.ip}
+                  onChange={e => setCameraConfig(p => ({ ...p, ip: e.target.value }))}
+                  className="w-full bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl py-2.5 px-3 text-sm font-mono focus:ring-2 focus:ring-teal-500 outline-none dark:text-white"
+                />
+              </div>
+              <div className="w-20">
+                <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1 block">Port</label>
+                <input
+                  type="text" placeholder="554"
+                  value={cameraConfig.port}
+                  onChange={e => setCameraConfig(p => ({ ...p, port: e.target.value }))}
+                  className="w-full bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl py-2.5 px-3 text-sm font-mono focus:ring-2 focus:ring-teal-500 outline-none dark:text-white"
+                />
+              </div>
+            </div>
+
+            {/* Username */}
+            <div>
+              <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1 block">Tên đăng nhập</label>
+              <input
+                type="text" placeholder="admin"
+                value={cameraConfig.username}
+                onChange={e => setCameraConfig(p => ({ ...p, username: e.target.value }))}
+                className="w-full bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl py-2.5 px-3 text-sm font-mono focus:ring-2 focus:ring-teal-500 outline-none dark:text-white"
+              />
+            </div>
+
+            {/* Password */}
+            <div>
+              <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1 block">Mật khẩu</label>
+              <div className="relative">
+                <input
+                  type={showCamPass ? 'text' : 'password'} placeholder="Nhập mật khẩu camera"
+                  value={cameraConfig.password}
+                  onChange={e => setCameraConfig(p => ({ ...p, password: e.target.value }))}
+                  className="w-full bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl py-2.5 pl-3 pr-10 text-sm font-mono focus:ring-2 focus:ring-teal-500 outline-none dark:text-white"
+                />
+                <button onClick={() => setShowCamPass(p => !p)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 p-1">
+                  {showCamPass ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+            </div>
+
+            {/* URL Format */}
+            <div>
+              <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1 block">Định dạng URL (thử nếu không được)</label>
+              <div className="relative">
+                <select
+                  value={cameraConfig.urlFormat}
+                  onChange={e => setCameraConfig(p => ({ ...p, urlFormat: e.target.value as '1' | '2' }))}
+                  className="w-full appearance-none bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl py-2.5 pl-3 pr-8 text-sm focus:ring-2 focus:ring-teal-500 outline-none dark:text-white">
+                  <option value="1">Format 1: /cam/playback (mặc định)</option>
+                  <option value="2">Format 2: /Streaming/tracks/101</option>
+                </select>
+                <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+              </div>
+            </div>
+
+            {/* Save Button */}
+            <button
+              onClick={() => {
+                localStorage.setItem('dahua_camera_config', JSON.stringify(cameraConfig));
+                setCamSaved(true);
+                setTimeout(() => setCamSaved(false), 3000);
+              }}
+              disabled={!cameraConfig.ip || !cameraConfig.password}
+              className="w-full bg-teal-600 hover:bg-teal-700 disabled:bg-slate-300 dark:disabled:bg-slate-600 text-white rounded-xl py-3 font-bold flex items-center justify-center gap-2 active:scale-95 transition-all"
+            >
+              <Save size={16} />
+              Lưu Cấu Hình Camera
+            </button>
+
+            {camSaved && (
+              <div className="bg-teal-50 dark:bg-teal-900/20 text-teal-700 dark:text-teal-300 p-3 rounded-xl text-sm flex items-center justify-center gap-2 font-medium">
+                <CheckCircle2 size={18} />
+                Đã lưu! Vào Lịch Sử để xem video.
+              </div>
+            )}
           </div>
         </div>
 
