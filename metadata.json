@@ -1,0 +1,5 @@
+{
+  "name": "SPX Scanner",
+  "description": "Quét mã vạch và QR code đơn hàng SPX, tự động lưu trữ thời gian đóng gói.",
+  "requestFramePermissions": ["camera", "microphone"]
+}

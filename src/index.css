@@ -1,0 +1,23 @@
+@import "tailwindcss";
+
+body {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: none;
+}
+
+input, textarea {
+  -webkit-user-select: auto;
+  user-select: auto;
+}
+
+@theme {
+  --animate-scan: scan 3s ease-in-out infinite;
+  
+  @keyframes scan {
+    0%, 100% { top: 0; }
+    50% { top: calc(100% - 2px); }
+  }
+}

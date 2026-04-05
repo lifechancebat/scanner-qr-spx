@@ -1,0 +1,33 @@
+{
+  "entities": {
+    "ScanRecord": {
+      "title": "ScanRecord",
+      "description": "A record of a scanned package",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "code": { "type": "string" },
+        "scanTime": { "type": "number", "description": "Timestamp in milliseconds" },
+        "finishTime": { "type": "number", "description": "Timestamp in milliseconds" },
+        "autoFinished": { "type": "boolean" },
+        "extractedData": {
+          "type": "object",
+          "properties": {
+            "recipientName": { "type": "string" },
+            "phone": { "type": "string" },
+            "address": { "type": "string" }
+          }
+        },
+        "scannedBy": { "type": "string", "description": "Email of the user who scanned it" },
+        "scannedByUid": { "type": "string", "description": "UID of the user who scanned it" }
+      },
+      "required": ["id", "code", "scanTime", "finishTime", "autoFinished", "scannedBy", "scannedByUid"]
+    }
+  },
+  "firestore": {
+    "/scans/{scanId}": {
+      "schema": { "$ref": "#/entities/ScanRecord" },
+      "description": "Collection of all scanned packages shared across the company"
+    }
+  }
+}

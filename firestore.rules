@@ -1,0 +1,49 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: scans
+    // Document ID: {scanId}
+    // Fields:
+    //   - id: string (required)
+    //   - code: string (required)
+    //   - scanTime: number (required)
+    //   - finishTime: number (required)
+    //   - autoFinished: boolean (required)
+    //   - extractedData: map (optional)
+    //   - scannedBy: string (required)
+    //   - scannedByUid: string (required)
+    //
+    // ===============================================================
+
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    function isValidScanRecord() {
+      let data = request.resource.data;
+      return hasRequiredFields(['id', 'code', 'scanTime', 'finishTime', 'autoFinished', 'scannedBy', 'scannedByUid']) &&
+             data.id is string && data.id.size() > 0 && data.id.size() < 100 &&
+             data.code is string && data.code.size() > 0 && data.code.size() < 200 &&
+             data.scanTime is number &&
+             data.finishTime is number &&
+             data.autoFinished is bool &&
+             data.scannedBy is string && data.scannedBy.size() > 0 && data.scannedBy.size() < 100 &&
+             data.scannedByUid is string && data.scannedByUid.size() > 0 && data.scannedByUid.size() < 100 &&
+             (!('extractedData' in data) || data.extractedData is map);
+    }
+
+    match /scans/{scanId} {
+      // Bypassing Firebase Auth as requested for shared passcode access
+      allow read: if true;
+      allow create: if isValidScanRecord();
+      allow update: if isValidScanRecord();
+      allow delete: if true;
+    }
+  }
+}
