@@ -14,41 +14,37 @@ interface CameraConfig {
   ip: string; port: string; username: string; password: string; urlFormat: '1' | '2' | '3';
 }
 
-// Chuyển timestamp (ms) → Dahua HTTP API format: YYYY-MM-DD HH:MM:SS (UTC)
+// Chuyển timestamp (ms) → Dahua HTTP API format: YYYY-MM-DD HH:MM:SS (LOCAL time)
 const toDahuaTime = (ts: number): string => {
   const d = new Date(ts);
   const p = (n: number) => n.toString().padStart(2, '0');
-  return `${d.getUTCFullYear()}-${p(d.getUTCMonth()+1)}-${p(d.getUTCDate())}%20${p(d.getUTCHours())}:${p(d.getUTCMinutes())}:${p(d.getUTCSeconds())}`;
+  // Dùng LOCAL time (không phải UTC) vì camera Dahua dùng timezone đã cấu hình
+  return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}%20${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
 };
 
-// Tải video clip từ camera Dahua qua HTTP API (loadfile.cgi)
-const downloadCameraVideo = async (cfg: CameraConfig, startTs: number, endTs: number): Promise<void> => {
-  const start = toDahuaTime(startTs);
-  const end = toDahuaTime(endTs);
-  // Mở thêm 30s trước/sau để có đủ context
-  const paddedStartTs = startTs - 30_000;
-  const paddedEndTs = endTs + 30_000;
-  const paddedStart = toDahuaTime(paddedStartTs);
-  const paddedEnd = toDahuaTime(paddedEndTs);
-
-  const httpPort = cfg.port || '80';
-  const baseUrl = `http://${cfg.ip}`;
-  const auth = btoa(`${cfg.username}:${cfg.password}`);
-
-  // Thử tải video qua loadfile.cgi
-  const loadUrl = `${baseUrl}/cgi-bin/loadfile.cgi?action=startLoad&channel=1&startTime=${paddedStart}&endTime=${paddedEnd}&subtype=0`;
-  
-  // Mở tab mới để download video
-  window.open(loadUrl, '_blank');
-};
-
-// Build URL hiển thị cho user copy
-const buildDisplayUrl = (cfg: CameraConfig, startTs: number, endTs: number): string => {
-  const paddedStartTs = startTs - 30_000;
+// Build tất cả URL variants để thử
+const buildVideoUrls = (cfg: CameraConfig, startTs: number, endTs: number) => {
+  // Mở thêm 60s trước và 30s sau để có đủ context
+  const paddedStartTs = startTs - 60_000;
   const paddedEndTs = endTs + 30_000;
   const start = toDahuaTime(paddedStartTs);
   const end = toDahuaTime(paddedEndTs);
-  return `http://${cfg.ip}/cgi-bin/loadfile.cgi?action=startLoad&channel=1&startTime=${start}&endTime=${end}&subtype=0`;
+  const base = `http://${cfg.username}:${cfg.password}@${cfg.ip}`;
+
+  return {
+    // URL chính: loadfile với auth trong URL, channel=1
+    primary: `${base}/cgi-bin/loadfile.cgi?action=startLoad&channel=1&startTime=${start}&endTime=${end}&subtype=0`,
+    // Backup: channel=0 (một số camera dùng 0-indexed)
+    ch0: `${base}/cgi-bin/loadfile.cgi?action=startLoad&channel=0&startTime=${start}&endTime=${end}&subtype=0`,
+    // Không subtype
+    noSub: `${base}/cgi-bin/loadfile.cgi?action=startLoad&channel=1&startTime=${start}&endTime=${end}`,
+  };
+};
+
+// Download video - thử URL chính
+const downloadCameraVideo = (cfg: CameraConfig, startTs: number, endTs: number): void => {
+  const urls = buildVideoUrls(cfg, startTs, endTs);
+  window.open(urls.primary, '_blank');
 };
 
 export default function HistoryView({ history, onBack, onDelete }: HistoryViewProps) {
@@ -255,45 +251,56 @@ export default function HistoryView({ history, onBack, onDelete }: HistoryViewPr
 
                   {/* Video playback button */}
                   {cameraConfig ? (() => {
-                    const displayUrl = buildDisplayUrl(cameraConfig, record.scanTime, record.finishTime);
+                    const urls = buildVideoUrls(cameraConfig, record.scanTime, record.finishTime);
                     const isLoading = loadingVideoId === record.id;
                     return (
                       <div className="flex flex-col gap-2 pt-2 border-t border-slate-50 dark:border-slate-700 mt-1">
+                        {/* Main download button */}
+                        <button
+                          onClick={() => {
+                            setLoadingVideoId(record.id);
+                            downloadCameraVideo(cameraConfig, record.scanTime, record.finishTime);
+                            setTimeout(() => setLoadingVideoId(null), 2000);
+                          }}
+                          disabled={isLoading}
+                          className="w-full flex items-center justify-center gap-1.5 bg-teal-600 hover:bg-teal-700 disabled:bg-teal-400 text-white text-xs font-bold py-2.5 rounded-xl active:scale-95 transition-all shadow-sm shadow-teal-500/20"
+                        >
+                          {isLoading ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+                          {isLoading ? 'Đang tải...' : '📥 Tải Video (Channel 1)'}
+                        </button>
+
+                        {/* Backup options */}
                         <div className="flex gap-2">
                           <button
-                            onClick={async () => {
-                              setLoadingVideoId(record.id);
-                              try {
-                                await downloadCameraVideo(cameraConfig, record.scanTime, record.finishTime);
-                              } catch (e) {
-                                alert('Không tải được video. Kiểm tra kết nối WiFi cùng mạng camera.');
-                              }
-                              setTimeout(() => setLoadingVideoId(null), 2000);
-                            }}
-                            disabled={isLoading}
-                            className="flex-1 flex items-center justify-center gap-1.5 bg-teal-600 hover:bg-teal-700 disabled:bg-teal-400 text-white text-xs font-bold py-2.5 rounded-xl active:scale-95 transition-all shadow-sm shadow-teal-500/20"
+                            onClick={() => window.open(urls.ch0, '_blank')}
+                            className="flex-1 flex items-center justify-center gap-1 bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-200 text-[10px] font-bold py-2 rounded-lg active:scale-95 transition-all"
                           >
-                            {isLoading ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
-                            {isLoading ? 'Đang tải...' : 'Tải Video'}
+                            Thử Channel 0
+                          </button>
+                          <button
+                            onClick={() => window.open(urls.noSub, '_blank')}
+                            className="flex-1 flex items-center justify-center gap-1 bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-200 text-[10px] font-bold py-2 rounded-lg active:scale-95 transition-all"
+                          >
+                            Thử không subtype
                           </button>
                           <button
                             onClick={() => {
-                              navigator.clipboard.writeText(displayUrl);
+                              navigator.clipboard.writeText(urls.primary);
                               setCopiedId(record.id);
                               setTimeout(() => setCopiedId(null), 2000);
                             }}
-                            title="Copy URL tải video"
-                            className={`flex items-center justify-center px-3 rounded-xl text-xs font-bold transition-all active:scale-95 ${
+                            className={`flex items-center justify-center px-3 rounded-lg text-[10px] font-bold transition-all active:scale-95 ${
                               copiedId === record.id
                                 ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-                                : 'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400'
+                                : 'bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-200'
                             }`}
                           >
-                            {copiedId === record.id ? '✓' : <Copy size={14} />}
+                            {copiedId === record.id ? '✓' : <Copy size={12} />}
                           </button>
                         </div>
+
                         <p className="text-[9px] text-slate-400 dark:text-slate-500 leading-relaxed">
-                          ⏱ Video: ±30s quanh thời gian quét ({format(record.scanTime, 'HH:mm:ss')} - {format(record.finishTime, 'HH:mm:ss')})
+                          ⏱ Video: 1p trước → 30s sau quét ({format(record.scanTime, 'HH:mm:ss')} - {format(record.finishTime, 'HH:mm:ss')})
                         </p>
                       </div>
                     );
