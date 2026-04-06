@@ -21,10 +21,10 @@ const toLocalDahuaTime = (ts: number): string => {
   return `${d.getFullYear()}_${p(d.getMonth()+1)}_${p(d.getDate())}_${p(d.getHours())}_${p(d.getMinutes())}_${p(d.getSeconds())}`;
 };
 
-// Build các tham số cho tool PC
+// Build các tham số cho tool PC - dùng đúng thời gian bắt đầu/kết thúc
 const buildToolParams = (startTs: number, endTs: number) => {
-  const dStart = new Date(startTs - 10_000);
-  const dEnd = new Date(endTs + 15_000);
+  const dStart = new Date(startTs);
+  const dEnd = new Date(endTs);
   const p = (n: number) => n.toString().padStart(2, '0');
   
   const date = `${dStart.getFullYear()}-${p(dStart.getMonth()+1)}-${p(dStart.getDate())}`;
@@ -276,7 +276,7 @@ export default function HistoryView({ history, onBack, onDelete }: HistoryViewPr
 
                           {cameraConfig.toolUrl && (
                             <a
-                              href={`${cameraConfig.toolUrl}/auto-download?${buildToolParams(record.scanTime, record.finishTime)}`}
+                              href={`${cameraConfig.toolUrl.replace(/\/+$/, '')}/auto-download?${buildToolParams(record.scanTime, record.finishTime)}`}
                               target="_blank"
                               rel="noopener noreferrer"
                               className={`flex flex-col items-center justify-center gap-0.5 text-white py-2 rounded-xl active:scale-95 transition-all shadow-sm flex-1 ${

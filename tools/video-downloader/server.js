@@ -44,7 +44,8 @@ function toFilename(dateStr, timeStr) {
 }
 
 // Trang HTML chính
-function renderHTML(message = '', videoFile = '') {
+// prefill: { date, startTime, endTime } - giá trị điền sẵn từ URL params
+function renderHTML(message = '', videoFile = '', prefill = {}) {
   const localIP = getLocalIP();
   const existingVideos = fs.readdirSync(VIDEOS_DIR)
     .filter(f => f.endsWith('.mp4'))
@@ -54,9 +55,14 @@ function renderHTML(message = '', videoFile = '') {
   const now = new Date();
   const pad = n => n.toString().padStart(2, '0');
   const today = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}`;
-  const nowTime = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+  const nowTime = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
   const fiveMinAgo = new Date(now - 5 * 60000);
-  const agoTime = `${pad(fiveMinAgo.getHours())}:${pad(fiveMinAgo.getMinutes())}`;
+  const agoTime = `${pad(fiveMinAgo.getHours())}:${pad(fiveMinAgo.getMinutes())}:${pad(fiveMinAgo.getSeconds())}`;
+
+  // Sử dụng prefill nếu có, nếu không dùng mặc định
+  const formDate = prefill.date || today;
+  const formStart = prefill.startTime || agoTime;
+  const formEnd = prefill.endTime || nowTime;
 
   return `<!DOCTYPE html>
 <html lang="vi">
@@ -126,17 +132,17 @@ function renderHTML(message = '', videoFile = '') {
       <div class="row">
         <div>
           <label>📅 Ngày</label>
-          <input type="date" name="date" value="${today}" required>
+          <input type="date" name="date" value="${formDate}" required>
         </div>
       </div>
       <div class="row">
         <div>
           <label>⏰ Từ lúc</label>
-          <input type="time" name="startTime" value="${agoTime}" step="1" required>
+          <input type="time" name="startTime" value="${formStart}" step="1" required>
         </div>
         <div>
           <label>⏰ Đến lúc</label>
-          <input type="time" name="endTime" value="${nowTime}" step="1" required>
+          <input type="time" name="endTime" value="${formEnd}" step="1" required>
         </div>
       </div>
       <button type="submit" class="primary">
@@ -191,17 +197,18 @@ function downloadVideo(date, startTime, endTime) {
     console.log(`   RTSP: ${rtspUrl.replace(CAMERA.password, '***')}`);
     console.log(`   Output: ${filename}`);
 
-    // Tính thời lượng tối đa (giây)
+    // Tính thời lượng chính xác (giây) - không thêm buffer
     const [sh, sm, ss] = startTime.split(':').map(Number);
     const [eh, em, es] = endTime.split(':').map(Number);
-    const duration = (eh * 3600 + em * 60 + (es||0)) - (sh * 3600 + sm * 60 + (ss||0)) + 10; // +10s buffer
+    const duration = (eh * 3600 + em * 60 + (es||0)) - (sh * 3600 + sm * 60 + (ss||0));
+    const safeDuration = Math.max(duration, 5); // tối thiểu 5s để tránh lỗi ffmpeg
 
     const ffmpeg = spawn('ffmpeg', [
       '-y',
       '-rtsp_transport', 'tcp',
       '-i', rtspUrl,
       '-c', 'copy',
-      '-t', Math.max(duration, 30).toString(),
+      '-t', safeDuration.toString(),
       '-movflags', '+faststart',
       outputPath
     ]);
@@ -226,11 +233,15 @@ function downloadVideo(date, startTime, endTime) {
 
 // HTTP Server
 const server = http.createServer(async (req, res) => {
-  const url = new URL(req.url, `http://localhost:${PORT}`);
+  // Normalize: bỏ các dấu // thừa ở đầu URL trước khi parse
+  // (tránh lỗi Node.js hiểu //auto-download thành hostname)
+  const rawUrl = req.url.replace(/^\/\/+/, '/');
+  const url = new URL(rawUrl, `http://localhost:${PORT}`);
+  const pathname = url.pathname;
 
   // Serve video files
-  if (url.pathname.startsWith('/videos/')) {
-    const filename = decodeURIComponent(url.pathname.replace('/videos/', ''));
+  if (pathname.startsWith('/videos/')) {
+    const filename = decodeURIComponent(pathname.replace('/videos/', ''));
     const filePath = path.join(VIDEOS_DIR, filename);
     if (fs.existsSync(filePath)) {
       const stat = fs.statSync(filePath);
@@ -249,7 +260,7 @@ const server = http.createServer(async (req, res) => {
   }
 
   // Auto-download via GET request (Integration with React Web App)
-  if (req.method === 'GET' && url.pathname === '/auto-download') {
+  if (req.method === 'GET' && pathname === '/auto-download') {
     const date = url.searchParams.get('date');
     const startTime = url.searchParams.get('startTime');
     const endTime = url.searchParams.get('endTime');
@@ -258,20 +269,35 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(400); res.end('Missing parameters'); return;
     }
 
+    const prefill = { date, startTime, endTime };
+    console.log(`\n🔗 Auto-download: ${date} ${startTime} → ${endTime}`);
+
     try {
       const filename = await downloadVideo(date, startTime, endTime);
-      // Giật tự động file xuống bằng cách redirect sang link file
-      res.writeHead(302, { 'Location': `/videos/${filename}` });
-      res.end();
+      // Tải file MP4 thẳng về máy (download trực tiếp)
+      const filePath = path.join(VIDEOS_DIR, filename);
+      const stat = fs.statSync(filePath);
+      res.writeHead(200, {
+        'Content-Type': 'video/mp4',
+        'Content-Length': stat.size,
+        'Content-Disposition': `attachment; filename="${filename}"`,
+        'Accept-Ranges': 'bytes'
+      });
+      fs.createReadStream(filePath).pipe(res);
     } catch (err) {
+      // Hiển thị form với ngày giờ đã điền sẵn để user dễ thử lại
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-      res.end(renderHTML(`<div class="msg error">❌ Lỗi Tải: ${err.message}</div>`));
+      res.end(renderHTML(
+        `<div class="msg error">❌ ${err.message}</div>`,
+        '',
+        prefill
+      ));
     }
     return;
   }
 
   // Download request via POST (From UI Form)
-  if (req.method === 'POST' && url.pathname === '/download') {
+  if (req.method === 'POST' && pathname === '/download') {
     const data = await parseFormData(req);
     try {
       const filename = await downloadVideo(data.date, data.startTime, data.endTime);
