@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ArrowLeft, Search, Package, Clock, Calendar, Sparkles, User, Download, Trash2, X, Play, Copy, Video, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Search, Package, Clock, Calendar, Sparkles, User, Download, Trash2, X, Play, Copy, Video, AlertCircle, Loader2 } from 'lucide-react';
 import { format, isSameDay } from 'date-fns';
 import { ScanRecord } from '../types';
 import { analyzePackingPerformance } from '../services/ai';
@@ -14,37 +14,41 @@ interface CameraConfig {
   ip: string; port: string; username: string; password: string; urlFormat: '1' | '2' | '3';
 }
 
-// Chuyển timestamp (ms) → UTC string format Dahua: YYYY_MM_DD_HH_MM_SS
-const toRtspTime = (ts: number): string => {
+// Chuyển timestamp (ms) → Dahua HTTP API format: YYYY-MM-DD HH:MM:SS (UTC)
+const toDahuaTime = (ts: number): string => {
   const d = new Date(ts);
   const p = (n: number) => n.toString().padStart(2, '0');
-  return `${d.getUTCFullYear()}_${p(d.getUTCMonth()+1)}_${p(d.getUTCDate())}_${p(d.getUTCHours())}_${p(d.getUTCMinutes())}_${p(d.getUTCSeconds())}`;
+  return `${d.getUTCFullYear()}-${p(d.getUTCMonth()+1)}-${p(d.getUTCDate())}%20${p(d.getUTCHours())}:${p(d.getUTCMinutes())}:${p(d.getUTCSeconds())}`;
 };
 
-const buildVlcUrl = (cfg: CameraConfig, startTs: number, endTs: number): { vlc: string; rtsp: string } => {
-  const start = toRtspTime(startTs);
-  const end   = toRtspTime(endTs);
-  const port = cfg.port || '554';
-  const auth  = `rtsp://${cfg.username}:${cfg.password}@${cfg.ip}:${port}`;
+// Tải video clip từ camera Dahua qua HTTP API (loadfile.cgi)
+const downloadCameraVideo = async (cfg: CameraConfig, startTs: number, endTs: number): Promise<void> => {
+  const start = toDahuaTime(startTs);
+  const end = toDahuaTime(endTs);
+  // Mở thêm 30s trước/sau để có đủ context
+  const paddedStartTs = startTs - 30_000;
+  const paddedEndTs = endTs + 30_000;
+  const paddedStart = toDahuaTime(paddedStartTs);
+  const paddedEnd = toDahuaTime(paddedEndTs);
+
+  const httpPort = cfg.port || '80';
+  const baseUrl = `http://${cfg.ip}`;
+  const auth = btoa(`${cfg.username}:${cfg.password}`);
+
+  // Thử tải video qua loadfile.cgi
+  const loadUrl = `${baseUrl}/cgi-bin/loadfile.cgi?action=startLoad&channel=1&startTime=${paddedStart}&endTime=${paddedEnd}&subtype=0`;
   
-  let path: string;
-  switch (cfg.urlFormat) {
-    case '2':
-      // Hikvision-style (một số Dahua mới cũng hỗ trợ)
-      path = `/Streaming/tracks/101?starttime=${start}&endtime=${end}`;
-      break;
-    case '3':
-      // Live stream test (không playback, chỉ xem trực tiếp)
-      path = `/cam/realmonitor?channel=1&subtype=0`;
-      break;
-    default:
-      // Format 1: Dahua chuẩn - playback từ SD card
-      path = `/cam/playback?channel=1&starttime=${start}&endtime=${end}`;
-      break;
-  }
-  
-  const rtsp = auth + path;
-  return { vlc: `vlc://${rtsp}`, rtsp };
+  // Mở tab mới để download video
+  window.open(loadUrl, '_blank');
+};
+
+// Build URL hiển thị cho user copy
+const buildDisplayUrl = (cfg: CameraConfig, startTs: number, endTs: number): string => {
+  const paddedStartTs = startTs - 30_000;
+  const paddedEndTs = endTs + 30_000;
+  const start = toDahuaTime(paddedStartTs);
+  const end = toDahuaTime(paddedEndTs);
+  return `http://${cfg.ip}/cgi-bin/loadfile.cgi?action=startLoad&channel=1&startTime=${start}&endTime=${end}&subtype=0`;
 };
 
 export default function HistoryView({ history, onBack, onDelete }: HistoryViewProps) {
@@ -54,6 +58,7 @@ export default function HistoryView({ history, onBack, onDelete }: HistoryViewPr
   const [selectedDate, setSelectedDate] = useState<string>('');
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [loadingVideoId, setLoadingVideoId] = useState<string | null>(null);
 
   const cameraConfig: CameraConfig | null = (() => {
     try {
@@ -250,31 +255,46 @@ export default function HistoryView({ history, onBack, onDelete }: HistoryViewPr
 
                   {/* Video playback button */}
                   {cameraConfig ? (() => {
-                    const urls = buildVlcUrl(cameraConfig, record.scanTime, record.finishTime);
+                    const displayUrl = buildDisplayUrl(cameraConfig, record.scanTime, record.finishTime);
+                    const isLoading = loadingVideoId === record.id;
                     return (
-                      <div className="flex gap-2 pt-2 border-t border-slate-50 dark:border-slate-700 mt-1">
-                        <a
-                          href={urls.vlc}
-                          className="flex-1 flex items-center justify-center gap-1.5 bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold py-2.5 rounded-xl active:scale-95 transition-all shadow-sm shadow-teal-500/20"
-                        >
-                          <Play size={14} />
-                          Xem Video (VLC)
-                        </a>
-                        <button
-                          onClick={() => {
-                            navigator.clipboard.writeText(urls.rtsp);
-                            setCopiedId(record.id);
-                            setTimeout(() => setCopiedId(null), 2000);
-                          }}
-                          title="Copy RTSP URL"
-                          className={`flex items-center justify-center px-3 rounded-xl text-xs font-bold transition-all active:scale-95 ${
-                            copiedId === record.id
-                              ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-                              : 'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400'
-                          }`}
-                        >
-                          <Copy size={14} />
-                        </button>
+                      <div className="flex flex-col gap-2 pt-2 border-t border-slate-50 dark:border-slate-700 mt-1">
+                        <div className="flex gap-2">
+                          <button
+                            onClick={async () => {
+                              setLoadingVideoId(record.id);
+                              try {
+                                await downloadCameraVideo(cameraConfig, record.scanTime, record.finishTime);
+                              } catch (e) {
+                                alert('Không tải được video. Kiểm tra kết nối WiFi cùng mạng camera.');
+                              }
+                              setTimeout(() => setLoadingVideoId(null), 2000);
+                            }}
+                            disabled={isLoading}
+                            className="flex-1 flex items-center justify-center gap-1.5 bg-teal-600 hover:bg-teal-700 disabled:bg-teal-400 text-white text-xs font-bold py-2.5 rounded-xl active:scale-95 transition-all shadow-sm shadow-teal-500/20"
+                          >
+                            {isLoading ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+                            {isLoading ? 'Đang tải...' : 'Tải Video'}
+                          </button>
+                          <button
+                            onClick={() => {
+                              navigator.clipboard.writeText(displayUrl);
+                              setCopiedId(record.id);
+                              setTimeout(() => setCopiedId(null), 2000);
+                            }}
+                            title="Copy URL tải video"
+                            className={`flex items-center justify-center px-3 rounded-xl text-xs font-bold transition-all active:scale-95 ${
+                              copiedId === record.id
+                                ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                                : 'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400'
+                            }`}
+                          >
+                            {copiedId === record.id ? '✓' : <Copy size={14} />}
+                          </button>
+                        </div>
+                        <p className="text-[9px] text-slate-400 dark:text-slate-500 leading-relaxed">
+                          ⏱ Video: ±30s quanh thời gian quét ({format(record.scanTime, 'HH:mm:ss')} - {format(record.finishTime, 'HH:mm:ss')})
+                        </p>
                       </div>
                     );
                   })() : (
