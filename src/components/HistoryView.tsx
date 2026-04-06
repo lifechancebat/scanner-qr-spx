@@ -156,8 +156,8 @@ export default function HistoryView({ history, onBack, onDelete, onUpdateNote }:
   };
 
   return (
-    <div className="flex-1 bg-slate-50 dark:bg-slate-900 flex flex-col overflow-hidden">
-      <header className="bg-slate-50 dark:bg-slate-900 flex items-center justify-between px-4 h-16 shrink-0 border-b border-slate-100 dark:border-slate-800">
+    <div className="flex-1 bg-slate-50 dark:bg-slate-900 overflow-y-auto pb-24 flex flex-col">
+      <header className="sticky top-0 z-10 bg-slate-50/95 dark:bg-slate-900/95 backdrop-blur-sm flex items-center justify-between px-4 h-16 shrink-0 border-b border-slate-100 dark:border-slate-800">
         <div className="flex items-center gap-4">
           <button onClick={onBack} className="text-blue-600 active:scale-95 transition-transform">
             <ArrowLeft size={24} />
@@ -180,7 +180,7 @@ export default function HistoryView({ history, onBack, onDelete, onUpdateNote }:
         </div>
       </header>
 
-      <div className="p-6 flex-1 flex flex-col gap-6 overflow-y-auto pb-24">
+      <div className="p-6 flex-1 flex flex-col gap-6">
         {/* Search + Date Filter */}
         <div className="flex flex-col gap-3">
           <div className="relative">
