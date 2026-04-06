@@ -35,11 +35,10 @@ const buildToolParams = (startTs: number, endTs: number, orderCode: string) => {
   return `date=${date}&startTime=${startTime}&endTime=${endTime}&orderCode=${encodeURIComponent(orderCode)}`;
 };
 
-// Build VLC URL cho playback từ thẻ nhớ camera
+// Build VLC URL cho playback từ thẻ nhớ camera — dùng đúng thời gian quét
 const buildVlcPlaybackUrl = (cfg: CameraConfig, startTs: number, endTs: number) => {
-  // Mở thêm 30s trước và 30s sau để có đủ context
-  const start = toLocalDahuaTime(startTs - 30_000);
-  const end = toLocalDahuaTime(endTs + 30_000);
+  const start = toLocalDahuaTime(startTs);
+  const end = toLocalDahuaTime(endTs);
   const rtsp = `rtsp://${cfg.username}:${cfg.password}@${cfg.ip}:${cfg.port || '554'}/cam/playback?channel=1&starttime=${start}&endtime=${end}`;
   return { vlc: `vlc://${rtsp}`, rtsp };
 };
