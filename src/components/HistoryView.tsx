@@ -22,7 +22,7 @@ const toLocalDahuaTime = (ts: number): string => {
 };
 
 // Build các tham số cho tool PC - dùng đúng thời gian bắt đầu/kết thúc
-const buildToolParams = (startTs: number, endTs: number) => {
+const buildToolParams = (startTs: number, endTs: number, orderCode: string) => {
   const dStart = new Date(startTs);
   const dEnd = new Date(endTs);
   const p = (n: number) => n.toString().padStart(2, '0');
@@ -31,7 +31,7 @@ const buildToolParams = (startTs: number, endTs: number) => {
   const startTime = `${p(dStart.getHours())}:${p(dStart.getMinutes())}:${p(dStart.getSeconds())}`;
   const endTime = `${p(dEnd.getHours())}:${p(dEnd.getMinutes())}:${p(dEnd.getSeconds())}`;
   
-  return `date=${date}&startTime=${startTime}&endTime=${endTime}`;
+  return `date=${date}&startTime=${startTime}&endTime=${endTime}&orderCode=${encodeURIComponent(orderCode)}`;
 };
 
 // Build VLC URL cho playback từ thẻ nhớ camera
@@ -51,6 +51,7 @@ export default function HistoryView({ history, onBack, onDelete }: HistoryViewPr
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [loadingVideoId, setLoadingVideoId] = useState<string | null>(null);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
   const cameraConfig: CameraConfig | null = (() => {
     try {
@@ -276,20 +277,28 @@ export default function HistoryView({ history, onBack, onDelete }: HistoryViewPr
 
                           {cameraConfig.toolUrl && (
                             <a
-                              href={`${cameraConfig.toolUrl.replace(/\/+$/, '')}/auto-download?${buildToolParams(record.scanTime, record.finishTime)}`}
+                              href={`${cameraConfig.toolUrl.replace(/\/+$/, '')}/auto-download?${buildToolParams(record.scanTime, record.finishTime, record.code)}`}
                               target="_blank"
                               rel="noopener noreferrer"
+                              onClick={() => {
+                                setDownloadingId(record.id);
+                                setTimeout(() => setDownloadingId(null), 45_000);
+                              }}
                               className={`flex flex-col items-center justify-center gap-0.5 text-white py-2 rounded-xl active:scale-95 transition-all shadow-sm flex-1 ${
                                 isRecent
                                   ? 'bg-slate-400 shadow-slate-400/20'
+                                  : downloadingId === record.id
+                                  ? 'bg-amber-500 shadow-amber-500/20'
                                   : 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-500/20'
                               }`}
                             >
                               <div className="flex items-center gap-1.5 font-bold text-xs">
-                                <Download size={14} />
-                                {isRecent ? '⏳ Thử Máy Tính' : '📥 Tải Máy Tính'}
+                                {downloadingId === record.id ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+                                {isRecent ? '⏳ Thử Máy Tính' : downloadingId === record.id ? 'Đang tải...' : '📥 Tải Máy Tính'}
                               </div>
-                              <span className="text-[9px] opacity-80">Lưu file MP4 cực nét</span>
+                              <span className="text-[9px] opacity-80">
+                                {downloadingId === record.id ? 'Mở file khi xong ~30s' : 'Lưu file MP4 cực nét'}
+                              </span>
                             </a>
                           )}
 

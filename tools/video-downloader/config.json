@@ -1,0 +1,10 @@
+{
+  "camera": {
+    "ip": "192.168.1.180",
+    "port": "554",
+    "username": "admin",
+    "password": "L25637C8",
+    "channel": 1
+  },
+  "serverPort": 3456
+}

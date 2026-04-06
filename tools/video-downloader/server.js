@@ -1,21 +1,32 @@
 const http = require('http');
-const { exec, spawn } = require('child_process');
+const { spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
 
-// ============ CẤU HÌNH CAMERA ============
-const CAMERA = {
-  ip: '192.168.1.180',
-  port: '554',
-  username: 'admin',
-  password: 'L25637C8',
-  channel: 1
+// ============ ĐỌC CẤU HÌNH TỪ config.json ============
+const CONFIG_PATH = path.join(__dirname, 'config.json');
+let CAMERA = {
+  ip: '192.168.1.180', port: '554', username: 'admin', password: '', channel: 1
 };
-const PORT = 3456;
-const VIDEOS_DIR = path.join(__dirname, 'videos');
-// ==========================================
+let PORT = 3456;
 
+try {
+  if (fs.existsSync(CONFIG_PATH)) {
+    const cfg = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf-8'));
+    if (cfg.camera) CAMERA = { ...CAMERA, ...cfg.camera };
+    if (cfg.serverPort) PORT = cfg.serverPort;
+    console.log('✅ Đã load cấu hình từ config.json');
+  } else {
+    console.log('⚠️  Không tìm thấy config.json, dùng cấu hình mặc định');
+    console.log('   → Tạo file config.json để lưu thông tin camera');
+  }
+} catch (e) {
+  console.error('❌ Lỗi đọc config.json:', e.message);
+}
+// ======================================================
+
+const VIDEOS_DIR = path.join(__dirname, 'videos');
 if (!fs.existsSync(VIDEOS_DIR)) fs.mkdirSync(VIDEOS_DIR, { recursive: true });
 
 // Lấy IP của PC trên mạng LAN
@@ -43,8 +54,12 @@ function toFilename(dateStr, timeStr) {
   return `${dateStr}_${timeStr.replace(/:/g, '-')}`;
 }
 
+// Làm sạch mã vận đơn để dùng trong tên file
+function sanitizeCode(code) {
+  return (code || '').replace(/[^a-zA-Z0-9]/g, '').substring(0, 30);
+}
+
 // Trang HTML chính
-// prefill: { date, startTime, endTime } - giá trị điền sẵn từ URL params
 function renderHTML(message = '', videoFile = '', prefill = {}) {
   const localIP = getLocalIP();
   const existingVideos = fs.readdirSync(VIDEOS_DIR)
@@ -59,10 +74,16 @@ function renderHTML(message = '', videoFile = '', prefill = {}) {
   const fiveMinAgo = new Date(now - 5 * 60000);
   const agoTime = `${pad(fiveMinAgo.getHours())}:${pad(fiveMinAgo.getMinutes())}:${pad(fiveMinAgo.getSeconds())}`;
 
-  // Sử dụng prefill nếu có, nếu không dùng mặc định
   const formDate = prefill.date || today;
   const formStart = prefill.startTime || agoTime;
   const formEnd = prefill.endTime || nowTime;
+  const formCode = prefill.orderCode || '';
+
+  // Tính tổng dung lượng
+  let totalSizeMB = 0;
+  existingVideos.forEach(f => {
+    try { totalSizeMB += fs.statSync(path.join(VIDEOS_DIR, f)).size / 1024 / 1024; } catch {}
+  });
 
   return `<!DOCTYPE html>
 <html lang="vi">
@@ -81,24 +102,23 @@ function renderHTML(message = '', videoFile = '', prefill = {}) {
     .card { background: #1e293b; border: 1px solid #334155; border-radius: 16px; padding: 20px; margin-bottom: 16px; }
     label { display: block; font-size: 0.7rem; font-weight: 700; color: #94a3b8;
             text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
-    input[type=date], input[type=time] {
+    input[type=date], input[type=time], input[type=text] {
       width: 100%; background: #0f172a; border: 1px solid #475569; border-radius: 12px;
       padding: 12px; color: #e2e8f0; font-size: 1rem; font-family: monospace;
-      outline: none; }
+      outline: none; margin-bottom: 12px; }
     input:focus { border-color: #14b8a6; box-shadow: 0 0 0 3px rgba(20,184,166,0.2); }
-    .row { display: flex; gap: 12px; margin-bottom: 12px; }
+    .row { display: flex; gap: 12px; }
     .row > div { flex: 1; }
     button.primary {
       width: 100%; background: linear-gradient(135deg, #0d9488, #14b8a6); color: white;
       border: none; border-radius: 12px; padding: 14px; font-size: 1rem; font-weight: 700;
-      cursor: pointer; transition: all 0.2s; margin-top: 8px; }
+      cursor: pointer; transition: all 0.2s; margin-top: 4px; }
     button.primary:hover { transform: scale(0.98); filter: brightness(1.1); }
     button.primary:active { transform: scale(0.95); }
     button.primary:disabled { background: #475569; cursor: not-allowed; transform: none; }
     .msg { padding: 12px 16px; border-radius: 12px; margin-bottom: 16px; font-size: 0.85rem; font-weight: 600; }
     .msg.success { background: #064e3b; color: #6ee7b7; border: 1px solid #065f46; }
     .msg.error { background: #7f1d1d; color: #fca5a5; border: 1px solid #991b1b; }
-    .msg.info { background: #1e3a5f; color: #93c5fd; border: 1px solid #1e40af; }
     .video-list { list-style: none; }
     .video-list li { display: flex; align-items: center; justify-content: space-between;
       padding: 10px 14px; background: #0f172a; border-radius: 10px; margin-bottom: 8px;
@@ -107,10 +127,9 @@ function renderHTML(message = '', videoFile = '', prefill = {}) {
       background: rgba(20,184,166,0.15); border-radius: 8px; white-space: nowrap; }
     .video-list a:hover { background: rgba(20,184,166,0.3); }
     .camera-info { font-size: 0.75rem; color: #64748b; text-align: center; margin-top: 16px; }
-    .spinner { display: none; }
-    form.loading .spinner { display: inline-block; animation: spin 1s linear infinite; }
-    form.loading button.primary { pointer-events: none; }
-    @keyframes spin { to { transform: rotate(360deg); } }
+    .storage-badge { font-size: 0.7rem; color: #64748b; text-align: right; margin-bottom: 8px; }
+    form.loading button.primary { pointer-events: none; background: #475569; }
+    form.loading button.primary::before { content: '⏳ '; }
   </style>
 </head>
 <body>
@@ -128,12 +147,14 @@ function renderHTML(message = '', videoFile = '', prefill = {}) {
       </a>
     </div>` : ''}
 
-    <form method="POST" action="/download" class="card" onsubmit="this.classList.add('loading');this.querySelector('button').disabled=true;this.querySelector('button').textContent='⏳ Đang tải video từ camera...';">
-      <div class="row">
-        <div>
-          <label>📅 Ngày</label>
-          <input type="date" name="date" value="${formDate}" required>
-        </div>
+    <form method="POST" action="/download" class="card" onsubmit="this.classList.add('loading');this.querySelector('button').textContent='Đang tải video từ camera...';">
+      <div>
+        <label>📦 Mã vận đơn (tùy chọn)</label>
+        <input type="text" name="orderCode" value="${formCode}" placeholder="VD: SPXVN067526969994">
+      </div>
+      <div>
+        <label>📅 Ngày</label>
+        <input type="date" name="date" value="${formDate}" required>
       </div>
       <div class="row">
         <div>
@@ -145,14 +166,13 @@ function renderHTML(message = '', videoFile = '', prefill = {}) {
           <input type="time" name="endTime" value="${formEnd}" step="1" required>
         </div>
       </div>
-      <button type="submit" class="primary">
-        <span class="spinner">⏳</span> 📥 Tải Video MP4
-      </button>
+      <button type="submit" class="primary">📥 Tải Video MP4</button>
     </form>
 
     ${existingVideos.length > 0 ? `
     <div class="card">
-      <label style="margin-bottom:12px">📂 Video đã tải (${existingVideos.length})</label>
+      <div class="storage-badge">📂 ${existingVideos.length} video · ${totalSizeMB.toFixed(0)}MB</div>
+      <label style="margin-bottom:12px">Video đã tải</label>
       <ul class="video-list">
         ${existingVideos.map(f => {
           const size = (fs.statSync(path.join(VIDEOS_DIR, f)).size / 1024 / 1024).toFixed(1);
@@ -184,28 +204,32 @@ function parseFormData(req) {
 }
 
 // Download video bằng ffmpeg
-function downloadVideo(date, startTime, endTime) {
+function downloadVideo(date, startTime, endTime, orderCode = '') {
   return new Promise((resolve, reject) => {
     const rtspStart = toRtspTime(date, startTime);
     const rtspEnd = toRtspTime(date, endTime);
-    const filename = `${toFilename(date, startTime)}_to_${toFilename(date, endTime).split('_').pop()}.mp4`;
+
+    // Tên file: SPXVN067526969994_10-49-38_to_10-49-54.mp4
+    const timeLabel = `${toFilename(date, startTime)}_to_${toFilename(date, endTime).split('_').pop()}`;
+    const safeCode = sanitizeCode(orderCode);
+    const filename = safeCode ? `${safeCode}_${timeLabel}.mp4` : `${timeLabel}.mp4`;
     const outputPath = path.join(VIDEOS_DIR, filename);
 
     const rtspUrl = `rtsp://${CAMERA.username}:${CAMERA.password}@${CAMERA.ip}:${CAMERA.port}/cam/playback?channel=${CAMERA.channel}&starttime=${rtspStart}&endtime=${rtspEnd}`;
 
     console.log(`\n📹 Đang tải video...`);
+    console.log(`   Mã: ${orderCode || '(không có)'}`);
     console.log(`   RTSP: ${rtspUrl.replace(CAMERA.password, '***')}`);
     console.log(`   Output: ${filename}`);
 
-    // Tính thời lượng chính xác (giây) - không thêm buffer
+    // Tính thời lượng chính xác
     const [sh, sm, ss] = startTime.split(':').map(Number);
     const [eh, em, es] = endTime.split(':').map(Number);
     const duration = (eh * 3600 + em * 60 + (es||0)) - (sh * 3600 + sm * 60 + (ss||0));
-    const safeDuration = Math.max(duration, 5); // tối thiểu 5s để tránh lỗi ffmpeg
+    const safeDuration = Math.max(duration, 5);
 
     const ffmpeg = spawn('ffmpeg', [
-      '-y',
-      '-rtsp_transport', 'tcp',
+      '-y', '-rtsp_transport', 'tcp',
       '-i', rtspUrl,
       '-c', 'copy',
       '-t', safeDuration.toString(),
@@ -231,13 +255,27 @@ function downloadVideo(date, startTime, endTime) {
   });
 }
 
+// Thêm CORS headers vào mọi response
+function setCorsHeaders(res) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+}
+
 // HTTP Server
 const server = http.createServer(async (req, res) => {
-  // Normalize: bỏ các dấu // thừa ở đầu URL trước khi parse
-  // (tránh lỗi Node.js hiểu //auto-download thành hostname)
+  // Normalize: bỏ dấu // thừa ở đầu URL
   const rawUrl = req.url.replace(/^\/\/+/, '/');
   const url = new URL(rawUrl, `http://localhost:${PORT}`);
   const pathname = url.pathname;
+
+  // CORS preflight
+  setCorsHeaders(res);
+  if (req.method === 'OPTIONS') {
+    res.writeHead(204);
+    res.end();
+    return;
+  }
 
   // Serve video files
   if (pathname.startsWith('/videos/')) {
@@ -259,22 +297,22 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // Auto-download via GET request (Integration with React Web App)
+  // Auto-download via GET (từ React app)
   if (req.method === 'GET' && pathname === '/auto-download') {
     const date = url.searchParams.get('date');
     const startTime = url.searchParams.get('startTime');
     const endTime = url.searchParams.get('endTime');
-    
+    const orderCode = url.searchParams.get('orderCode') || '';
+
     if (!date || !startTime || !endTime) {
       res.writeHead(400); res.end('Missing parameters'); return;
     }
 
-    const prefill = { date, startTime, endTime };
-    console.log(`\n🔗 Auto-download: ${date} ${startTime} → ${endTime}`);
+    const prefill = { date, startTime, endTime, orderCode };
+    console.log(`\n🔗 Auto-download: ${orderCode || 'no-code'} | ${date} ${startTime} → ${endTime}`);
 
     try {
-      const filename = await downloadVideo(date, startTime, endTime);
-      // Tải file MP4 thẳng về máy (download trực tiếp)
+      const filename = await downloadVideo(date, startTime, endTime, orderCode);
       const filePath = path.join(VIDEOS_DIR, filename);
       const stat = fs.statSync(filePath);
       res.writeHead(200, {
@@ -285,22 +323,20 @@ const server = http.createServer(async (req, res) => {
       });
       fs.createReadStream(filePath).pipe(res);
     } catch (err) {
-      // Hiển thị form với ngày giờ đã điền sẵn để user dễ thử lại
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
       res.end(renderHTML(
         `<div class="msg error">❌ ${err.message}</div>`,
-        '',
-        prefill
+        '', prefill
       ));
     }
     return;
   }
 
-  // Download request via POST (From UI Form)
+  // Download via POST (từ form)
   if (req.method === 'POST' && pathname === '/download') {
     const data = await parseFormData(req);
     try {
-      const filename = await downloadVideo(data.date, data.startTime, data.endTime);
+      const filename = await downloadVideo(data.date, data.startTime, data.endTime, data.orderCode || '');
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
       res.end(renderHTML('', filename));
     } catch (err) {

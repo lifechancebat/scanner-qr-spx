@@ -11,7 +11,8 @@ interface CurrentSessionProps {
 
 export default function CurrentSession({ scannedCode, onBack, onFinish, onHistory }: CurrentSessionProps) {
   const [scanTime] = useState<number>(Date.now());
-  const [timeLeft, setTimeLeft] = useState<number>(600);
+  const timeoutMinutes = parseInt(localStorage.getItem('session_timeout_minutes') || '10', 10);
+  const [timeLeft, setTimeLeft] = useState<number>(timeoutMinutes * 60);
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef<any>(null);
   const onFinishRef = useRef(onFinish);

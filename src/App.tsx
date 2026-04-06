@@ -129,10 +129,14 @@ export default function App() {
         scannedBy: employeeName || 'Nhân viên',
         scannedByUid: 'shared-device'
       };
-      setDoc(doc(db, 'scans', record.id), record).catch(console.error);
-      playTing();
-      navigator.vibrate?.([100, 50, 100]);
-      showToast('success', 'Đã lưu!', code, 2000);
+      setDoc(doc(db, 'scans', record.id), record).then(() => {
+        playTing();
+        navigator.vibrate?.([100, 50, 100]);
+        showToast('success', 'Đã lưu!', code, 2000);
+      }).catch((e) => {
+        console.error('Quick mode save failed', e);
+        showToast('error', 'Lỗi lưu!', `Không thể lưu đơn ${code}. Kiểm tra kết nối.`, 5000);
+      });
       setResumeSignal(k => k + 1);
     } else {
       setCurrentCode(code);

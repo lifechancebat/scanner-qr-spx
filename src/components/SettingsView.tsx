@@ -25,6 +25,9 @@ export default function SettingsView({ onBack, darkMode, onToggleDarkMode, onLog
   const [isInstalled, setIsInstalled] = useState(false);
   const [showCamPass, setShowCamPass] = useState(false);
   const [camSaved, setCamSaved] = useState(false);
+  const [sessionTimeout, setSessionTimeout] = useState<number>(() => {
+    return parseInt(localStorage.getItem('session_timeout_minutes') || '10', 10);
+  });
   const [cameraConfig, setCameraConfig] = useState<CameraConfig>(() => {
     const saved = localStorage.getItem('dahua_camera_config');
     return saved ? JSON.parse(saved) : { ip: '', port: '554', username: 'admin', password: '', urlFormat: '1' } as CameraConfig;
@@ -136,6 +139,35 @@ export default function SettingsView({ onBack, darkMode, onToggleDarkMode, onLog
               className={`relative w-14 h-8 rounded-full transition-colors duration-300 ${darkMode ? 'bg-indigo-600' : 'bg-slate-200'}`}>
               <div className={`absolute top-1 w-6 h-6 bg-white rounded-full shadow-md transition-transform duration-300 ${darkMode ? 'translate-x-7' : 'translate-x-1'}`} />
             </button>
+          </div>
+        </div>
+
+        {/* Session Timeout */}
+        <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-slate-100 dark:border-slate-700">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-100 dark:bg-amber-900/50 text-amber-600 flex items-center justify-center">
+                <ChevronDown size={20} />
+              </div>
+              <div>
+                <h3 className="font-bold text-slate-900 dark:text-white">Thời Gian Tự Kết Thúc</h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">Tự hoàn thành phiên sau</p>
+              </div>
+            </div>
+            <select
+              value={sessionTimeout}
+              onChange={e => {
+                const val = parseInt(e.target.value, 10);
+                setSessionTimeout(val);
+                localStorage.setItem('session_timeout_minutes', String(val));
+              }}
+              className="bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-white font-bold rounded-xl px-3 py-2 text-sm outline-none border border-slate-200 dark:border-slate-600"
+            >
+              <option value={5}>5 phút</option>
+              <option value={10}>10 phút</option>
+              <option value={15}>15 phút</option>
+              <option value={20}>20 phút</option>
+            </select>
           </div>
         </div>
 
