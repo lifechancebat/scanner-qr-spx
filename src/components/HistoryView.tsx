@@ -235,15 +235,27 @@ export default function HistoryView({ history, onBack, onDelete }: HistoryViewPr
                   {/* Video playback button */}
                   {cameraConfig ? (() => {
                     const urls = buildVlcPlaybackUrl(cameraConfig, record.scanTime, record.finishTime);
+                    const minutesAgo = Math.floor((Date.now() - record.finishTime) / 60_000);
+                    const isRecent = minutesAgo < 5;
                     return (
                       <div className="flex flex-col gap-2 pt-2 border-t border-slate-50 dark:border-slate-700 mt-1">
+                        {isRecent && (
+                          <div className="flex items-center gap-1.5 text-[10px] text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 px-3 py-1.5 rounded-lg">
+                            <Clock size={11} />
+                            <span>Camera đang ghi — chờ ~{5 - minutesAgo}p nữa để xem video</span>
+                          </div>
+                        )}
                         <div className="flex gap-2">
                           <a
                             href={urls.vlc}
-                            className="flex-1 flex items-center justify-center gap-1.5 bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold py-2.5 rounded-xl active:scale-95 transition-all shadow-sm shadow-teal-500/20"
+                            className={`flex-1 flex items-center justify-center gap-1.5 text-white text-xs font-bold py-2.5 rounded-xl active:scale-95 transition-all shadow-sm ${
+                              isRecent 
+                                ? 'bg-slate-400 shadow-slate-400/20' 
+                                : 'bg-teal-600 hover:bg-teal-700 shadow-teal-500/20'
+                            }`}
                           >
                             <Play size={14} />
-                            ▶ Xem Video (VLC)
+                            {isRecent ? '⏳ Thử Xem Video' : '▶ Xem Video (VLC)'}
                           </a>
                           <button
                             onClick={() => {
