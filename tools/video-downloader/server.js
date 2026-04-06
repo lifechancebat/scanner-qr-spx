@@ -248,7 +248,29 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // Download request
+  // Auto-download via GET request (Integration with React Web App)
+  if (req.method === 'GET' && url.pathname === '/auto-download') {
+    const date = url.searchParams.get('date');
+    const startTime = url.searchParams.get('startTime');
+    const endTime = url.searchParams.get('endTime');
+    
+    if (!date || !startTime || !endTime) {
+      res.writeHead(400); res.end('Missing parameters'); return;
+    }
+
+    try {
+      const filename = await downloadVideo(date, startTime, endTime);
+      // Giật tự động file xuống bằng cách redirect sang link file
+      res.writeHead(302, { 'Location': `/videos/${filename}` });
+      res.end();
+    } catch (err) {
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      res.end(renderHTML(`<div class="msg error">❌ Lỗi Tải: ${err.message}</div>`));
+    }
+    return;
+  }
+
+  // Download request via POST (From UI Form)
   if (req.method === 'POST' && url.pathname === '/download') {
     const data = await parseFormData(req);
     try {

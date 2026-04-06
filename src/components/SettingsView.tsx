@@ -200,11 +200,28 @@ export default function SettingsView({ onBack, darkMode, onToggleDarkMode, onLog
               </div>
             </div>
 
+            {/* Tool PC Server */}
+            <div>
+              <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1 block flex items-center justify-between">
+                <span>Địa chỉ Tool Downloader (Trên PC)</span>
+                <span className="text-[9px] text-teal-600 bg-teal-50 px-1.5 py-0.5 rounded">Tùy chọn</span>
+              </label>
+              <input
+                type="text" placeholder="http://192.168.1.15:3456"
+                value={cameraConfig.toolUrl || ''}
+                onChange={e => setCameraConfig(p => ({ ...p, toolUrl: e.target.value }))}
+                className="w-full bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl py-2.5 px-3 text-sm font-mono focus:ring-2 focus:ring-teal-500 outline-none dark:text-white"
+              />
+              <p className="text-[10px] text-slate-400 mt-1">
+                Điền IP của Tool trên PC (VD: http://192.168.1.15:3456) để bật nút tự động tải file MP4 trên đơn.
+              </p>
+            </div>
+
             {/* Info box */}
             <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-3">
               <p className="text-[10px] text-blue-700 dark:text-blue-300 leading-relaxed">
-                📹 Bấm "Xem Video" trong Lịch Sử → mở VLC phát đúng đoạn camera.<br/>
-                ⚠️ Cần cài <strong>VLC for Mobile</strong> từ App Store + cùng WiFi với camera.
+                👉 Khuyên dùng <strong>VLC for Mobile</strong> rồi bấm nút "Ghi màn hình" iPhone cho nhanh.<br/>
+                👉 Tính năng Tải File MP4 yêu cầu máy tính (PC) phải luôn mở Tool.
               </p>
             </div>
 

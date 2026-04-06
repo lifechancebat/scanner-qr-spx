@@ -11,7 +11,7 @@ interface HistoryViewProps {
 }
 
 interface CameraConfig {
-  ip: string; port: string; username: string; password: string; urlFormat: '1' | '2' | '3';
+  ip: string; port: string; username: string; password: string; urlFormat: '1' | '2' | '3'; toolUrl?: string;
 }
 
 // Chuyển timestamp (ms) → Dahua RTSP format: YYYY_MM_DD_HH_MM_SS (LOCAL time)
@@ -19,6 +19,19 @@ const toLocalDahuaTime = (ts: number): string => {
   const d = new Date(ts);
   const p = (n: number) => n.toString().padStart(2, '0');
   return `${d.getFullYear()}_${p(d.getMonth()+1)}_${p(d.getDate())}_${p(d.getHours())}_${p(d.getMinutes())}_${p(d.getSeconds())}`;
+};
+
+// Build các tham số cho tool PC
+const buildToolParams = (startTs: number, endTs: number) => {
+  const dStart = new Date(startTs - 10_000);
+  const dEnd = new Date(endTs + 15_000);
+  const p = (n: number) => n.toString().padStart(2, '0');
+  
+  const date = `${dStart.getFullYear()}-${p(dStart.getMonth()+1)}-${p(dStart.getDate())}`;
+  const startTime = `${p(dStart.getHours())}:${p(dStart.getMinutes())}:${p(dStart.getSeconds())}`;
+  const endTime = `${p(dEnd.getHours())}:${p(dEnd.getMinutes())}:${p(dEnd.getSeconds())}`;
+  
+  return `date=${date}&startTime=${startTime}&endTime=${endTime}`;
 };
 
 // Build VLC URL cho playback từ thẻ nhớ camera
@@ -248,33 +261,58 @@ export default function HistoryView({ history, onBack, onDelete }: HistoryViewPr
                         <div className="flex gap-2">
                           <a
                             href={urls.vlc}
-                            className={`flex-1 flex items-center justify-center gap-1.5 text-white text-xs font-bold py-2.5 rounded-xl active:scale-95 transition-all shadow-sm ${
+                            className={`flex flex-col items-center justify-center gap-0.5 text-white py-2 rounded-xl active:scale-95 transition-all shadow-sm flex-1 ${
                               isRecent 
                                 ? 'bg-slate-400 shadow-slate-400/20' 
                                 : 'bg-teal-600 hover:bg-teal-700 shadow-teal-500/20'
                             }`}
                           >
-                            <Play size={14} />
-                            {isRecent ? '⏳ Thử Xem Video' : '▶ Xem Video (VLC)'}
+                            <div className="flex items-center gap-1.5 font-bold text-xs">
+                              <Play size={14} />
+                              {isRecent ? '⏳ Thử Xem (VLC)' : '▶ Xem (VLC)'}
+                            </div>
+                            <span className="text-[9px] opacity-80">Ghi Màn Hình</span>
                           </a>
-                          <button
-                            onClick={() => {
-                              navigator.clipboard.writeText(urls.rtsp);
-                              setCopiedId(record.id);
-                              setTimeout(() => setCopiedId(null), 2000);
-                            }}
-                            title="Copy RTSP URL"
-                            className={`flex items-center justify-center px-3 rounded-xl text-xs font-bold transition-all active:scale-95 ${
-                              copiedId === record.id
-                                ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-                                : 'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400'
-                            }`}
-                          >
-                            {copiedId === record.id ? '✓' : <Copy size={14} />}
-                          </button>
+
+                          {cameraConfig.toolUrl && (
+                            <a
+                              href={`${cameraConfig.toolUrl}/auto-download?${buildToolParams(record.scanTime, record.finishTime)}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className={`flex flex-col items-center justify-center gap-0.5 text-white py-2 rounded-xl active:scale-95 transition-all shadow-sm flex-1 ${
+                                isRecent
+                                  ? 'bg-slate-400 shadow-slate-400/20'
+                                  : 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-500/20'
+                              }`}
+                            >
+                              <div className="flex items-center gap-1.5 font-bold text-xs">
+                                <Download size={14} />
+                                {isRecent ? '⏳ Thử Máy Tính' : '📥 Tải Máy Tính'}
+                              </div>
+                              <span className="text-[9px] opacity-80">Lưu file MP4 cực nét</span>
+                            </a>
+                          )}
+
+                          {!cameraConfig.toolUrl && (
+                            <button
+                              onClick={() => {
+                                navigator.clipboard.writeText(urls.rtsp);
+                                setCopiedId(record.id);
+                                setTimeout(() => setCopiedId(null), 2000);
+                              }}
+                              title="Copy RTSP URL"
+                              className={`flex items-center justify-center px-4 rounded-xl text-xs font-bold transition-all active:scale-95 ${
+                                copiedId === record.id
+                                  ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                                  : 'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400'
+                              }`}
+                            >
+                              {copiedId === record.id ? '✓' : <Copy size={16} />}
+                            </button>
+                          )}
                         </div>
-                        <p className="text-[9px] text-slate-400 dark:text-slate-500 leading-relaxed">
-                          ⏱ ±30s quanh ({format(record.scanTime, 'HH:mm:ss')} → {format(record.finishTime, 'HH:mm:ss')}) · 💡 Lưu video: bật Ghi Màn Hình trước khi bấm Xem
+                        <p className="text-[9px] text-slate-400 dark:text-slate-500 leading-relaxed text-center mt-1">
+                          ⏱ Khung giờ: {format(record.scanTime, 'HH:mm:ss')} → {format(record.finishTime, 'HH:mm:ss')}
                         </p>
                       </div>
                     );
