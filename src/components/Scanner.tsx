@@ -134,7 +134,7 @@ export default function Scanner({
   return (
     <div className="flex-1 relative bg-slate-900 overflow-hidden flex flex-col">
       {/* Header */}
-      <header className="absolute top-0 w-full z-50 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md flex items-center justify-between px-4 h-14">
+      <header className={`absolute top-0 w-full z-50 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md flex items-center justify-between px-4 h-14 transition-opacity duration-200 ${isActive ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}>
         <div className="flex items-center gap-2">
           <h1 className="font-bold text-base text-slate-900 dark:text-white">Quét Đơn</h1>
           <div className="bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-full flex items-center gap-1">
