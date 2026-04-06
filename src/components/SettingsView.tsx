@@ -13,7 +13,7 @@ interface CameraConfig {
   port: string;
   username: string;
   password: string;
-  urlFormat: '1' | '2';
+  urlFormat: '1' | '2' | '3';
 }
 
 export default function SettingsView({ onBack, darkMode, onToggleDarkMode, onLogout }: SettingsViewProps) {
@@ -27,7 +27,7 @@ export default function SettingsView({ onBack, darkMode, onToggleDarkMode, onLog
   const [camSaved, setCamSaved] = useState(false);
   const [cameraConfig, setCameraConfig] = useState<CameraConfig>(() => {
     const saved = localStorage.getItem('dahua_camera_config');
-    return saved ? JSON.parse(saved) : { ip: '', port: '554', username: 'admin', password: '', urlFormat: '1' };
+    return saved ? JSON.parse(saved) : { ip: '', port: '554', username: 'admin', password: '', urlFormat: '1' } as CameraConfig;
   });
 
   useEffect(() => {
@@ -162,9 +162,10 @@ export default function SettingsView({ onBack, darkMode, onToggleDarkMode, onLog
                 />
               </div>
               <div className="w-20">
-                <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1 block">Port</label>
+                <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1 block">Port RTSP</label>
                 <input
                   type="text" placeholder="554"
+                  title="Port RTSP mặc định là 554. KHÔNG phải 37777!"
                   value={cameraConfig.port}
                   onChange={e => setCameraConfig(p => ({ ...p, port: e.target.value }))}
                   className="w-full bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl py-2.5 px-3 text-sm font-mono focus:ring-2 focus:ring-teal-500 outline-none dark:text-white"
@@ -206,14 +207,26 @@ export default function SettingsView({ onBack, darkMode, onToggleDarkMode, onLog
               <div className="relative">
                 <select
                   value={cameraConfig.urlFormat}
-                  onChange={e => setCameraConfig(p => ({ ...p, urlFormat: e.target.value as '1' | '2' }))}
+                  onChange={e => setCameraConfig(p => ({ ...p, urlFormat: e.target.value as '1' | '2' | '3' }))}
                   className="w-full appearance-none bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl py-2.5 pl-3 pr-8 text-sm focus:ring-2 focus:ring-teal-500 outline-none dark:text-white">
-                  <option value="1">Format 1: /cam/playback (mặc định)</option>
+                  <option value="1">Format 1: /cam/playback (Dahua chuẩn)</option>
                   <option value="2">Format 2: /Streaming/tracks/101</option>
+                  <option value="3">⚡ Test Live Stream (không cần thời gian)</option>
                 </select>
                 <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
               </div>
             </div>
+
+            {/* Port Warning */}
+            {cameraConfig.port === '37777' && (
+              <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-3 flex items-start gap-2">
+                <span className="text-red-500 text-lg leading-none">⚠️</span>
+                <div className="text-xs text-red-700 dark:text-red-300 leading-relaxed">
+                  <strong>Port 37777 là port quản lý TCP</strong>, không phải RTSP!<br/>
+                  VLC cần <strong>port RTSP = 554</strong> (mặc định Dahua).
+                </div>
+              </div>
+            )}
 
             {/* Save Button */}
             <button
@@ -233,6 +246,25 @@ export default function SettingsView({ onBack, darkMode, onToggleDarkMode, onLog
               <div className="bg-teal-50 dark:bg-teal-900/20 text-teal-700 dark:text-teal-300 p-3 rounded-xl text-sm flex items-center justify-center gap-2 font-medium">
                 <CheckCircle2 size={18} />
                 Đã lưu! Vào Lịch Sử để xem video.
+              </div>
+            )}
+
+            {/* Test Connection */}
+            {cameraConfig.ip && cameraConfig.password && (
+              <div className="bg-slate-50 dark:bg-slate-700 rounded-xl p-3 mt-1">
+                <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">🔗 Test kết nối camera</p>
+                <p className="text-[10px] text-slate-500 dark:text-slate-400 mb-2">
+                  Bấm nút dưới để mở VLC xem live stream. Nếu live được → quay lại chọn Format 1 để xem playback.
+                </p>
+                <a
+                  href={`vlc://rtsp://${cameraConfig.username}:${cameraConfig.password}@${cameraConfig.ip}:${cameraConfig.port || '554'}/cam/realmonitor?channel=1&subtype=0`}
+                  className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-2.5 rounded-xl active:scale-95 transition-all"
+                >
+                  ▶️ Test Live Stream (VLC)
+                </a>
+                <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-2 font-mono break-all leading-relaxed">
+                  URL: rtsp://{cameraConfig.username}:***@{cameraConfig.ip}:{cameraConfig.port || '554'}/cam/realmonitor?channel=1&subtype=0
+                </p>
               </div>
             )}
           </div>

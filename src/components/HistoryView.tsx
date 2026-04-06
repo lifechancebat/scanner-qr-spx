@@ -11,23 +11,38 @@ interface HistoryViewProps {
 }
 
 interface CameraConfig {
-  ip: string; port: string; username: string; password: string; urlFormat: '1' | '2';
+  ip: string; port: string; username: string; password: string; urlFormat: '1' | '2' | '3';
 }
 
-// Chuyển timestamp (ms) → UTC string format Dahua: YYYYMMDDTHHMMSSz
+// Chuyển timestamp (ms) → UTC string format Dahua: YYYY_MM_DD_HH_MM_SS
 const toRtspTime = (ts: number): string => {
   const d = new Date(ts);
   const p = (n: number) => n.toString().padStart(2, '0');
-  return `${d.getUTCFullYear()}${p(d.getUTCMonth()+1)}${p(d.getUTCDate())}T${p(d.getUTCHours())}${p(d.getUTCMinutes())}${p(d.getUTCSeconds())}Z`;
+  return `${d.getUTCFullYear()}_${p(d.getUTCMonth()+1)}_${p(d.getUTCDate())}_${p(d.getUTCHours())}_${p(d.getUTCMinutes())}_${p(d.getUTCSeconds())}`;
 };
 
 const buildVlcUrl = (cfg: CameraConfig, startTs: number, endTs: number): { vlc: string; rtsp: string } => {
   const start = toRtspTime(startTs);
   const end   = toRtspTime(endTs);
-  const auth  = `rtsp://${encodeURIComponent(cfg.username)}:${encodeURIComponent(cfg.password)}@${cfg.ip}:${cfg.port || '554'}`;
-  const path  = cfg.urlFormat === '2'
-    ? `/Streaming/tracks/101?starttime=${start}&endtime=${end}`
-    : `/cam/playback?starttime=${start}&endtime=${end}`;
+  const port = cfg.port || '554';
+  const auth  = `rtsp://${cfg.username}:${cfg.password}@${cfg.ip}:${port}`;
+  
+  let path: string;
+  switch (cfg.urlFormat) {
+    case '2':
+      // Hikvision-style (một số Dahua mới cũng hỗ trợ)
+      path = `/Streaming/tracks/101?starttime=${start}&endtime=${end}`;
+      break;
+    case '3':
+      // Live stream test (không playback, chỉ xem trực tiếp)
+      path = `/cam/realmonitor?channel=1&subtype=0`;
+      break;
+    default:
+      // Format 1: Dahua chuẩn - playback từ SD card
+      path = `/cam/playback?channel=1&starttime=${start}&endtime=${end}`;
+      break;
+  }
+  
   const rtsp = auth + path;
   return { vlc: `vlc://${rtsp}`, rtsp };
 };
