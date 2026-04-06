@@ -274,7 +274,7 @@ export default function HistoryView({ history, onBack, onDelete }: HistoryViewPr
                           </button>
                         </div>
                         <p className="text-[9px] text-slate-400 dark:text-slate-500 leading-relaxed">
-                          ⏱ ±30s quanh thời gian quét ({format(record.scanTime, 'HH:mm:ss')} → {format(record.finishTime, 'HH:mm:ss')})
+                          ⏱ ±30s quanh ({format(record.scanTime, 'HH:mm:ss')} → {format(record.finishTime, 'HH:mm:ss')}) · 💡 Lưu video: bật Ghi Màn Hình trước khi bấm Xem
                         </p>
                       </div>
                     );
