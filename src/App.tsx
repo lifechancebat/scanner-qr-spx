@@ -8,7 +8,7 @@ import DashboardView from './components/DashboardView';
 import { ScanRecord } from './types';
 import { playBeep, playTing, playError } from './utils/audio';
 import { db } from './services/firebase';
-import { collection, onSnapshot, query, orderBy, setDoc, doc, deleteDoc } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy, setDoc, doc, deleteDoc, updateDoc } from 'firebase/firestore';
 import { isToday } from 'date-fns';
 
 type ViewState = 'scanner' | 'session' | 'history' | 'settings' | 'dashboard';
@@ -171,6 +171,15 @@ export default function App() {
     }
   }, [showToast]);
 
+  const handleUpdateNote = useCallback(async (id: string, notes: string) => {
+    try {
+      await updateDoc(doc(db, 'scans', id), { notes });
+    } catch (e) {
+      console.error("Update note failed", e);
+      showToast('error', 'Lỗi!', 'Không thể lưu ghi chú.');
+    }
+  }, [showToast]);
+
   if (!isAuthenticatedLocal) {
     return (
       <div className="min-h-screen bg-slate-100 dark:bg-slate-950 flex justify-center font-sans text-slate-900 dark:text-slate-100">
@@ -227,7 +236,7 @@ export default function App() {
         )}
         {currentView === 'history' && (
           <div className="absolute inset-0 z-20 flex flex-col bg-slate-50 dark:bg-slate-900">
-            <HistoryView history={scanHistory} onBack={() => setCurrentView('scanner')} onDelete={handleDeleteScan} />
+            <HistoryView history={scanHistory} onBack={() => setCurrentView('scanner')} onDelete={handleDeleteScan} onUpdateNote={handleUpdateNote} />
           </div>
         )}
         {currentView === 'settings' && (

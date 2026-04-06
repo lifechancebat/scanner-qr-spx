@@ -11,4 +11,5 @@ export interface ScanRecord {
   };
   scannedBy?: string;
   scannedByUid?: string;
+  notes?: string;
 }

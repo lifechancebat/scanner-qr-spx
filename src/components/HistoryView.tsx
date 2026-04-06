@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { ArrowLeft, Search, Package, Clock, Calendar, Sparkles, User, Download, Trash2, X, Play, Copy, Video, AlertCircle, Loader2 } from 'lucide-react';
+import { useState, useRef } from 'react';
+import { ArrowLeft, Search, Package, Clock, Calendar, Sparkles, User, Download, Trash2, X, Play, Copy, Video, AlertCircle, Loader2, MessageSquare, Check } from 'lucide-react';
 import { format, isSameDay } from 'date-fns';
 import { ScanRecord } from '../types';
 import { analyzePackingPerformance } from '../services/ai';
@@ -8,6 +8,7 @@ interface HistoryViewProps {
   history: ScanRecord[];
   onBack: () => void;
   onDelete: (id: string) => void;
+  onUpdateNote: (id: string, notes: string) => Promise<void>;
 }
 
 interface CameraConfig {
@@ -43,7 +44,7 @@ const buildVlcPlaybackUrl = (cfg: CameraConfig, startTs: number, endTs: number) 
   return { vlc: `vlc://${rtsp}`, rtsp };
 };
 
-export default function HistoryView({ history, onBack, onDelete }: HistoryViewProps) {
+export default function HistoryView({ history, onBack, onDelete, onUpdateNote }: HistoryViewProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [aiInsight, setAiInsight] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -52,6 +53,10 @@ export default function HistoryView({ history, onBack, onDelete }: HistoryViewPr
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [loadingVideoId, setLoadingVideoId] = useState<string | null>(null);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
+  const [noteText, setNoteText] = useState('');
+  const [savingNoteId, setSavingNoteId] = useState<string | null>(null);
+  const noteInputRef = useRef<HTMLTextAreaElement>(null);
 
   const cameraConfig: CameraConfig | null = (() => {
     try {
@@ -245,6 +250,59 @@ export default function HistoryView({ history, onBack, onDelete }: HistoryViewPr
                       <span>Người quét: {record.scannedBy}</span>
                     </div>
                   )}
+
+                  {/* Notes section */}
+                  <div className="mt-2">
+                    {editingNoteId === record.id ? (
+                      <div className="flex flex-col gap-2">
+                        <textarea
+                          ref={noteInputRef}
+                          value={noteText}
+                          onChange={e => setNoteText(e.target.value)}
+                          placeholder="Ghi chú về đơn này..."
+                          rows={2}
+                          className="w-full text-xs bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-xl px-3 py-2 text-slate-700 dark:text-slate-300 resize-none outline-none focus:ring-2 focus:ring-amber-400"
+                        />
+                        <div className="flex gap-2">
+                          <button
+                            onClick={async () => {
+                              setSavingNoteId(record.id);
+                              await onUpdateNote(record.id, noteText.trim());
+                              setSavingNoteId(null);
+                              setEditingNoteId(null);
+                            }}
+                            disabled={savingNoteId === record.id}
+                            className="flex items-center gap-1 text-[11px] font-bold bg-amber-500 text-white px-3 py-1.5 rounded-lg active:scale-95 transition-all disabled:opacity-50"
+                          >
+                            {savingNoteId === record.id ? <Loader2 size={11} className="animate-spin" /> : <Check size={11} />}
+                            Lưu
+                          </button>
+                          <button
+                            onClick={() => setEditingNoteId(null)}
+                            className="text-[11px] font-bold bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 px-3 py-1.5 rounded-lg active:scale-95"
+                          >
+                            Hủy
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          setEditingNoteId(record.id);
+                          setNoteText(record.notes || '');
+                          setTimeout(() => noteInputRef.current?.focus(), 50);
+                        }}
+                        className={`flex items-center gap-1.5 text-[11px] w-full text-left rounded-xl px-3 py-2 transition-all active:scale-[0.98] ${
+                          record.notes
+                            ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-700'
+                            : 'bg-slate-50 dark:bg-slate-700 text-slate-400 dark:text-slate-500'
+                        }`}
+                      >
+                        <MessageSquare size={12} className="shrink-0" />
+                        <span className="truncate">{record.notes || 'Thêm ghi chú...'}</span>
+                      </button>
+                    )}
+                  </div>
 
                   {/* Video playback button */}
                   {cameraConfig ? (() => {
