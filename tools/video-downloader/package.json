@@ -1,5 +1,8 @@
 {
   "name": "video-downloader",
   "version": "1.0.0",
-  "type": "commonjs"
+  "type": "commonjs",
+  "dependencies": {
+    "node-notifier": "^10.0.1"
+  }
 }

@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react';
-import { ArrowLeft, Search, Package, Clock, Calendar, Sparkles, User, Download, Trash2, X, Play, Copy, Video, AlertCircle, Loader2, MessageSquare, Check } from 'lucide-react';
+import { ArrowLeft, Search, Package, Clock, Calendar, Sparkles, User, Download, Trash2, X, Play, Copy, Video, AlertCircle, Loader2, MessageSquare, Check, FileSpreadsheet } from 'lucide-react';
 import { format, isSameDay } from 'date-fns';
+import * as XLSX from 'xlsx';
 import { ScanRecord } from '../types';
 import { analyzePackingPerformance } from '../services/ai';
 
@@ -114,6 +115,56 @@ export default function HistoryView({ history, onBack, onDelete, onUpdateNote }:
     document.body.removeChild(link);
   };
 
+  const exportToExcel = () => {
+    const dataToExport = filteredHistory.length > 0 ? filteredHistory : history;
+    if (dataToExport.length === 0) return;
+
+    const dateLabel = selectedDate
+      ? format(new Date(selectedDate + 'T00:00:00'), 'dd-MM-yyyy')
+      : format(new Date(), 'dd-MM-yyyy');
+
+    const rows = dataToExport.map((r, i) => {
+      const durSec = Math.round((r.finishTime - r.scanTime) / 1000);
+      const durMin = Math.floor(durSec / 60);
+      const durS = durSec % 60;
+      return {
+        'STT': i + 1,
+        'M\u00e3 V\u1eadn \u0110\u01a1n': r.code,
+        'Nh\u00e2n Vi\u00ean': r.scannedBy || '',
+        'B\u1eaft \u0110\u1ea7u': format(r.scanTime, 'HH:mm:ss'),
+        'K\u1ebft Th\u00fac': format(r.finishTime, 'HH:mm:ss'),
+        'Ng\u00e0y': format(r.scanTime, 'dd/MM/yyyy'),
+        'Th\u1eddi L\u01b0\u1ee3ng': `${durMin}p ${durS}s`,
+        'Gi\u00e2y': durSec,
+        'Ghi Ch\u00fa': r.notes || '',
+        'T\u1ef1 K\u1ebft Th\u00fac': r.autoFinished ? 'C\u00f3' : 'Kh\u00f4ng'
+      };
+    });
+
+    const ws = XLSX.utils.json_to_sheet(rows);
+    ws['!cols'] = [
+      { wch: 5 }, { wch: 26 }, { wch: 14 }, { wch: 10 }, { wch: 10 },
+      { wch: 12 }, { wch: 12 }, { wch: 7 }, { wch: 30 }, { wch: 12 }
+    ];
+
+    // Style header row
+    const range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
+    for (let C = range.s.c; C <= range.e.c; C++) {
+      const cell = ws[XLSX.utils.encode_cell({ r: 0, c: C })];
+      if (cell) {
+        cell.s = {
+          font: { bold: true, color: { rgb: 'FFFFFF' } },
+          fill: { fgColor: { rgb: '1E40AF' } },
+          alignment: { horizontal: 'center' }
+        };
+      }
+    }
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Danh S\u00e1ch \u0110\u01a1n');
+    XLSX.writeFile(wb, `SPX_${dateLabel}_${dataToExport.length}don.xlsx`);
+  };
+
   return (
     <div className="flex-1 bg-slate-50 dark:bg-slate-900 overflow-y-auto pb-24 flex flex-col">
       <header className="bg-slate-50 dark:bg-slate-900 flex items-center justify-between px-4 h-16 shrink-0">
@@ -123,9 +174,20 @@ export default function HistoryView({ history, onBack, onDelete, onUpdateNote }:
           </button>
           <h1 className="font-bold text-lg text-slate-900 dark:text-white">Lịch Sử Đóng Gói</h1>
         </div>
-        <button onClick={exportToCSV} className="text-blue-600 active:scale-95 transition-transform" title="Xuất CSV">
-          <Download size={24} />
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={exportToExcel}
+            disabled={history.length === 0}
+            className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3 py-2 rounded-xl active:scale-95 transition-all disabled:opacity-40"
+            title="Xu\u1ea5t Excel"
+          >
+            <FileSpreadsheet size={16} />
+            Excel
+          </button>
+          <button onClick={exportToCSV} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 active:scale-95 transition-transform p-1" title="Xu\u1ea5t CSV">
+            <Download size={20} />
+          </button>
+        </div>
       </header>
 
       <div className="p-6 flex-1 flex flex-col gap-6">

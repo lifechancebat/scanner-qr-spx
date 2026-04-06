@@ -5,6 +5,23 @@ const path = require('path');
 const os = require('os');
 const crypto = require('crypto');
 
+// Windows desktop notification
+let notifier = null;
+try { notifier = require('node-notifier'); } catch { /* optional */ }
+
+function showNotification(title, message) {
+  if (notifier) {
+    notifier.notify({
+      title,
+      message,
+      icon: path.join(__dirname, 'icon.png'), // optional
+      sound: true,
+      wait: false,
+      appID: 'SPX Video Downloader'
+    });
+  }
+}
+
 // ============ ĐỌC CẤU HÌNH TỪ config.json ============
 const CONFIG_PATH = path.join(__dirname, 'config.json');
 let CAMERA = {
@@ -60,6 +77,11 @@ async function processQueue() {
     nextJob.status = 'done';
     nextJob.filename = filename;
     nextJob.doneAt = Date.now();
+
+    // Thông báo Windows khi tải xong
+    const labelCode = nextJob.orderCode ? nextJob.orderCode : `${nextJob.startTime}→${nextJob.endTime}`;
+    const sizeMB = (fs.statSync(path.join(VIDEOS_DIR, filename)).size / 1024 / 1024).toFixed(1);
+    showNotification('✅ Video đã tải xong!', `📦 ${labelCode} · ${sizeMB}MB`);
   } catch (err) {
     nextJob.status = 'error';
     nextJob.error = err.message;

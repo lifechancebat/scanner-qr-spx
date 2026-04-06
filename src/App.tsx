@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { BarChart2, Truck, Settings, Scan, KeyRound, User, Check, AlertTriangle } from 'lucide-react';
+import { BarChart2, Truck, Settings, Scan, KeyRound, User, Check, AlertTriangle, RotateCcw } from 'lucide-react';
 import Scanner from './components/Scanner';
 import CurrentSession from './components/CurrentSession';
 import HistoryView from './components/HistoryView';
@@ -22,6 +22,8 @@ export default function App() {
   const [quickMode, setQuickMode] = useState(() => localStorage.getItem('quick_mode') === 'true');
   const [resumeSignal, setResumeSignal] = useState(0);
   const toastTimer = useRef<ReturnType<typeof setTimeout>>();
+  const [undoRecord, setUndoRecord] = useState<ScanRecord | null>(null);
+  const undoTimerRef = useRef<ReturnType<typeof setTimeout>>();
 
   // Auth — không lưu plaintext password trong localStorage
   const [isAuthenticatedLocal, setIsAuthenticatedLocal] = useState(false);
@@ -133,6 +135,9 @@ export default function App() {
         playTing();
         navigator.vibrate?.([100, 50, 100]);
         showToast('success', 'Đã lưu!', code, 2000);
+        setUndoRecord(record);
+        if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+        undoTimerRef.current = setTimeout(() => setUndoRecord(null), 8000);
       }).catch((e) => {
         console.error('Quick mode save failed', e);
         showToast('error', 'Lỗi lưu!', `Không thể lưu đơn ${code}. Kiểm tra kết nối.`, 5000);
@@ -158,6 +163,9 @@ export default function App() {
     const dur = Math.round((finalRecord.finishTime - finalRecord.scanTime) / 1000);
     const m = Math.floor(dur / 60), s = dur % 60;
     showToast('success', 'Đã lưu!', `${finalRecord.code} • ${m > 0 ? `${m}p ${s}s` : `${s}s`}`);
+    setUndoRecord(finalRecord);
+    if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+    undoTimerRef.current = setTimeout(() => setUndoRecord(null), 8000);
     setCurrentView('scanner');
   };
 
@@ -179,6 +187,14 @@ export default function App() {
       showToast('error', 'Lỗi!', 'Không thể lưu ghi chú.');
     }
   }, [showToast]);
+
+  const handleUndo = useCallback(async () => {
+    if (!undoRecord) return;
+    if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+    setUndoRecord(null);
+    await handleDeleteScan(undoRecord.id);
+    showToast('success', 'Đã hoàn tác!', `Đã xóa đơn ${undoRecord.code}`, 2000);
+  }, [undoRecord, handleDeleteScan, showToast]);
 
   if (!isAuthenticatedLocal) {
     return (
@@ -255,6 +271,25 @@ export default function App() {
                 <p className="font-bold text-sm">{toast.title}</p>
                 <p className={`text-xs truncate mt-0.5 ${toast.type === 'success' ? 'text-green-100' : 'text-red-100'}`}>{toast.message}</p>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Undo banner — hiện 8 giây sau khi lưu đơn */}
+        {undoRecord && (
+          <div className="absolute bottom-[calc(env(safe-area-inset-bottom)+72px)] left-4 right-4 z-[55] animate-[slideDown_0.25s_ease-out]">
+            <div className="bg-slate-800 dark:bg-slate-700 rounded-2xl px-4 py-3 shadow-2xl flex items-center justify-between gap-3 border border-slate-600">
+              <div className="overflow-hidden">
+                <p className="text-xs text-slate-400">Vừa lưu xong</p>
+                <p className="text-sm font-bold text-white truncate">{undoRecord.code}</p>
+              </div>
+              <button
+                onClick={handleUndo}
+                className="flex items-center gap-1.5 text-amber-400 font-bold text-sm bg-amber-400/10 hover:bg-amber-400/20 px-3 py-2 rounded-xl active:scale-95 transition-all shrink-0"
+              >
+                <RotateCcw size={14} />
+                Hoàn Tác
+              </button>
             </div>
           </div>
         )}
