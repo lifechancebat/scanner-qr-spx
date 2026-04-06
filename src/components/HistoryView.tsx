@@ -14,37 +14,20 @@ interface CameraConfig {
   ip: string; port: string; username: string; password: string; urlFormat: '1' | '2' | '3';
 }
 
-// Chuyển timestamp (ms) → Dahua HTTP API format: YYYY-MM-DD HH:MM:SS (LOCAL time)
-const toDahuaTime = (ts: number): string => {
+// Chuyển timestamp (ms) → Dahua RTSP format: YYYY_MM_DD_HH_MM_SS (LOCAL time)
+const toLocalDahuaTime = (ts: number): string => {
   const d = new Date(ts);
   const p = (n: number) => n.toString().padStart(2, '0');
-  // Dùng LOCAL time (không phải UTC) vì camera Dahua dùng timezone đã cấu hình
-  return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}%20${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+  return `${d.getFullYear()}_${p(d.getMonth()+1)}_${p(d.getDate())}_${p(d.getHours())}_${p(d.getMinutes())}_${p(d.getSeconds())}`;
 };
 
-// Build tất cả URL variants để thử
-const buildVideoUrls = (cfg: CameraConfig, startTs: number, endTs: number) => {
-  // Mở thêm 60s trước và 30s sau để có đủ context
-  const paddedStartTs = startTs - 60_000;
-  const paddedEndTs = endTs + 30_000;
-  const start = toDahuaTime(paddedStartTs);
-  const end = toDahuaTime(paddedEndTs);
-  const base = `http://${cfg.username}:${cfg.password}@${cfg.ip}`;
-
-  return {
-    // URL chính: loadfile với auth trong URL, channel=1
-    primary: `${base}/cgi-bin/loadfile.cgi?action=startLoad&channel=1&startTime=${start}&endTime=${end}&subtype=0`,
-    // Backup: channel=0 (một số camera dùng 0-indexed)
-    ch0: `${base}/cgi-bin/loadfile.cgi?action=startLoad&channel=0&startTime=${start}&endTime=${end}&subtype=0`,
-    // Không subtype
-    noSub: `${base}/cgi-bin/loadfile.cgi?action=startLoad&channel=1&startTime=${start}&endTime=${end}`,
-  };
-};
-
-// Download video - thử URL chính
-const downloadCameraVideo = (cfg: CameraConfig, startTs: number, endTs: number): void => {
-  const urls = buildVideoUrls(cfg, startTs, endTs);
-  window.open(urls.primary, '_blank');
+// Build VLC URL cho playback từ thẻ nhớ camera
+const buildVlcPlaybackUrl = (cfg: CameraConfig, startTs: number, endTs: number) => {
+  // Mở thêm 30s trước và 30s sau để có đủ context
+  const start = toLocalDahuaTime(startTs - 30_000);
+  const end = toLocalDahuaTime(endTs + 30_000);
+  const rtsp = `rtsp://${cfg.username}:${cfg.password}@${cfg.ip}:${cfg.port || '554'}/cam/playback?channel=1&starttime=${start}&endtime=${end}`;
+  return { vlc: `vlc://${rtsp}`, rtsp };
 };
 
 export default function HistoryView({ history, onBack, onDelete }: HistoryViewProps) {
@@ -251,56 +234,35 @@ export default function HistoryView({ history, onBack, onDelete }: HistoryViewPr
 
                   {/* Video playback button */}
                   {cameraConfig ? (() => {
-                    const urls = buildVideoUrls(cameraConfig, record.scanTime, record.finishTime);
-                    const isLoading = loadingVideoId === record.id;
+                    const urls = buildVlcPlaybackUrl(cameraConfig, record.scanTime, record.finishTime);
                     return (
                       <div className="flex flex-col gap-2 pt-2 border-t border-slate-50 dark:border-slate-700 mt-1">
-                        {/* Main download button */}
-                        <button
-                          onClick={() => {
-                            setLoadingVideoId(record.id);
-                            downloadCameraVideo(cameraConfig, record.scanTime, record.finishTime);
-                            setTimeout(() => setLoadingVideoId(null), 2000);
-                          }}
-                          disabled={isLoading}
-                          className="w-full flex items-center justify-center gap-1.5 bg-teal-600 hover:bg-teal-700 disabled:bg-teal-400 text-white text-xs font-bold py-2.5 rounded-xl active:scale-95 transition-all shadow-sm shadow-teal-500/20"
-                        >
-                          {isLoading ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
-                          {isLoading ? 'Đang tải...' : '📥 Tải Video (Channel 1)'}
-                        </button>
-
-                        {/* Backup options */}
                         <div className="flex gap-2">
-                          <button
-                            onClick={() => window.open(urls.ch0, '_blank')}
-                            className="flex-1 flex items-center justify-center gap-1 bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-200 text-[10px] font-bold py-2 rounded-lg active:scale-95 transition-all"
+                          <a
+                            href={urls.vlc}
+                            className="flex-1 flex items-center justify-center gap-1.5 bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold py-2.5 rounded-xl active:scale-95 transition-all shadow-sm shadow-teal-500/20"
                           >
-                            Thử Channel 0
-                          </button>
-                          <button
-                            onClick={() => window.open(urls.noSub, '_blank')}
-                            className="flex-1 flex items-center justify-center gap-1 bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-200 text-[10px] font-bold py-2 rounded-lg active:scale-95 transition-all"
-                          >
-                            Thử không subtype
-                          </button>
+                            <Play size={14} />
+                            ▶ Xem Video (VLC)
+                          </a>
                           <button
                             onClick={() => {
-                              navigator.clipboard.writeText(urls.primary);
+                              navigator.clipboard.writeText(urls.rtsp);
                               setCopiedId(record.id);
                               setTimeout(() => setCopiedId(null), 2000);
                             }}
-                            className={`flex items-center justify-center px-3 rounded-lg text-[10px] font-bold transition-all active:scale-95 ${
+                            title="Copy RTSP URL"
+                            className={`flex items-center justify-center px-3 rounded-xl text-xs font-bold transition-all active:scale-95 ${
                               copiedId === record.id
                                 ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-                                : 'bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-200'
+                                : 'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400'
                             }`}
                           >
-                            {copiedId === record.id ? '✓' : <Copy size={12} />}
+                            {copiedId === record.id ? '✓' : <Copy size={14} />}
                           </button>
                         </div>
-
                         <p className="text-[9px] text-slate-400 dark:text-slate-500 leading-relaxed">
-                          ⏱ Video: 1p trước → 30s sau quét ({format(record.scanTime, 'HH:mm:ss')} - {format(record.finishTime, 'HH:mm:ss')})
+                          ⏱ ±30s quanh thời gian quét ({format(record.scanTime, 'HH:mm:ss')} → {format(record.finishTime, 'HH:mm:ss')})
                         </p>
                       </div>
                     );

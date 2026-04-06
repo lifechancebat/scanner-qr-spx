@@ -146,19 +146,30 @@ export default function SettingsView({ onBack, darkMode, onToggleDarkMode, onLog
             <h2 className="font-bold text-slate-900 dark:text-white">Camera Dahua</h2>
           </div>
           <p className="text-xs text-slate-500 dark:text-slate-400 mb-4 leading-relaxed">
-            Cấu hình để tải video đóng hàng trực tiếp từ thẻ nhớ camera.
+            Cấu hình để xem lại video đóng hàng qua VLC.
           </p>
 
           <div className="flex flex-col gap-3">
-            {/* IP only - no port needed for HTTP */}
-            <div>
-              <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1 block">Địa chỉ IP Camera</label>
-              <input
-                type="text" placeholder="192.168.1.108"
-                value={cameraConfig.ip}
-                onChange={e => setCameraConfig(p => ({ ...p, ip: e.target.value }))}
-                className="w-full bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl py-2.5 px-3 text-sm font-mono focus:ring-2 focus:ring-teal-500 outline-none dark:text-white"
-              />
+            {/* IP + Port */}
+            <div className="flex gap-2">
+              <div className="flex-1">
+                <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1 block">Địa chỉ IP</label>
+                <input
+                  type="text" placeholder="192.168.1.108"
+                  value={cameraConfig.ip}
+                  onChange={e => setCameraConfig(p => ({ ...p, ip: e.target.value }))}
+                  className="w-full bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl py-2.5 px-3 text-sm font-mono focus:ring-2 focus:ring-teal-500 outline-none dark:text-white"
+                />
+              </div>
+              <div className="w-20">
+                <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1 block">Port</label>
+                <input
+                  type="text" placeholder="554"
+                  value={cameraConfig.port}
+                  onChange={e => setCameraConfig(p => ({ ...p, port: e.target.value }))}
+                  className="w-full bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl py-2.5 px-3 text-sm font-mono focus:ring-2 focus:ring-teal-500 outline-none dark:text-white"
+                />
+              </div>
             </div>
 
             {/* Username */}
@@ -192,8 +203,8 @@ export default function SettingsView({ onBack, darkMode, onToggleDarkMode, onLog
             {/* Info box */}
             <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-3">
               <p className="text-[10px] text-blue-700 dark:text-blue-300 leading-relaxed">
-                📹 Video sẽ được tải trực tiếp từ thẻ nhớ SD camera qua HTTP.<br/>
-                ⚠️ iPhone phải kết nối <strong>cùng WiFi</strong> với camera để tải video.
+                📹 Bấm "Xem Video" trong Lịch Sử → mở VLC phát đúng đoạn camera.<br/>
+                ⚠️ Cần cài <strong>VLC for Mobile</strong> từ App Store + cùng WiFi với camera.
               </p>
             </div>
 
@@ -214,24 +225,22 @@ export default function SettingsView({ onBack, darkMode, onToggleDarkMode, onLog
             {camSaved && (
               <div className="bg-teal-50 dark:bg-teal-900/20 text-teal-700 dark:text-teal-300 p-3 rounded-xl text-sm flex items-center justify-center gap-2 font-medium">
                 <CheckCircle2 size={18} />
-                Đã lưu! Vào Lịch Sử để tải video.
+                Đã lưu! Vào Lịch Sử → Xem Video (VLC).
               </div>
             )}
 
-            {/* Test Connection */}
+            {/* Test VLC Connection */}
             {cameraConfig.ip && cameraConfig.password && (
               <div className="bg-slate-50 dark:bg-slate-700 rounded-xl p-3 mt-1">
-                <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">🔗 Test kết nối</p>
+                <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">🔗 Test kết nối VLC</p>
                 <a
-                  href={`http://${cameraConfig.ip}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                  href={`vlc://rtsp://${cameraConfig.username}:${cameraConfig.password}@${cameraConfig.ip}:${cameraConfig.port || '554'}/cam/realmonitor?channel=1&subtype=0`}
                   className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-2.5 rounded-xl active:scale-95 transition-all"
                 >
-                  🌐 Mở trang web Camera
+                  ▶️ Test Live Stream (VLC)
                 </a>
                 <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-2 leading-relaxed">
-                  Nếu trang web mở được → camera OK, tải video sẽ hoạt động.
+                  Nếu VLC hiện hình camera → kết nối OK ✅
                 </p>
               </div>
             )}
