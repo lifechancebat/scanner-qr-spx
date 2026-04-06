@@ -1,9 +1,8 @@
 import { useState, useRef } from 'react';
-import { ArrowLeft, Search, Package, Clock, Calendar, Sparkles, User, Download, Trash2, X, Play, Copy, Video, AlertCircle, Loader2, MessageSquare, Check, FileSpreadsheet } from 'lucide-react';
+import { ArrowLeft, Search, Package, Clock, Calendar, User, Download, Trash2, X, Play, Copy, Video, AlertCircle, Loader2, MessageSquare, Check, FileSpreadsheet } from 'lucide-react';
 import { format, isSameDay } from 'date-fns';
 import * as XLSX from 'xlsx';
 import { ScanRecord } from '../types';
-import { analyzePackingPerformance } from '../services/ai';
 
 interface HistoryViewProps {
   history: ScanRecord[];
@@ -47,8 +46,6 @@ const buildVlcPlaybackUrl = (cfg: CameraConfig, startTs: number, endTs: number) 
 
 export default function HistoryView({ history, onBack, onDelete, onUpdateNote }: HistoryViewProps) {
   const [searchTerm, setSearchTerm] = useState('');
-  const [aiInsight, setAiInsight] = useState<string | null>(null);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string>('');
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -78,13 +75,6 @@ export default function HistoryView({ history, onBack, onDelete, onUpdateNote }:
     }
     return matchesSearch;
   });
-
-  const handleAnalyze = async () => {
-    setIsAnalyzing(true);
-    const insight = await analyzePackingPerformance(history);
-    setAiInsight(insight);
-    setIsAnalyzing(false);
-  };
 
   const handleDelete = (id: string) => {
     onDelete(id);
@@ -191,25 +181,6 @@ export default function HistoryView({ history, onBack, onDelete, onUpdateNote }:
       </header>
 
       <div className="p-6 flex-1 flex flex-col gap-6">
-        {/* AI Insights */}
-        <div className="bg-gradient-to-br from-purple-50 to-indigo-50 dark:from-purple-900/20 dark:to-indigo-900/20 rounded-2xl p-4 border border-purple-100 dark:border-purple-800 shadow-sm">
-          <div className="flex items-center justify-between mb-2">
-            <h3 className="font-bold text-purple-900 dark:text-purple-200 flex items-center gap-2">
-              <Sparkles size={18} className="text-purple-600 dark:text-purple-400" />
-              Trợ lý AI
-            </h3>
-            <button onClick={handleAnalyze} disabled={isAnalyzing || history.length === 0}
-              className="text-xs font-bold bg-purple-600 text-white px-3 py-1.5 rounded-lg active:scale-95 transition-transform disabled:opacity-50">
-              {isAnalyzing ? "Đang phân tích..." : "Phân tích"}
-            </button>
-          </div>
-          {aiInsight ? (
-            <p className="text-sm text-purple-800 dark:text-purple-200 leading-relaxed bg-white/60 dark:bg-white/10 p-3 rounded-xl">{aiInsight}</p>
-          ) : (
-            <p className="text-xs text-purple-600/80 dark:text-purple-400/80">Nhấn nút để AI phân tích hiệu suất.</p>
-          )}
-        </div>
-
         {/* Search + Date Filter */}
         <div className="flex flex-col gap-3">
           <div className="relative">
