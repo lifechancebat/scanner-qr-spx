@@ -23,6 +23,7 @@ export default function Scanner({
   todayCount, quickMode, onToggleQuickMode, activeUsers 
 }: ScannerProps) {
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
+  const [isStarting, setIsStarting] = useState(true);
   const [torchOn, setTorchOn] = useState(false);
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const isUnmounted = useRef(false);
@@ -73,6 +74,21 @@ export default function Scanner({
         }
         if (isUnmounted.current) return;
 
+        // iOS PWA: observe #reader và patch <video> ngay khi được tạo ra
+        const readerEl = document.getElementById('reader');
+        if (readerEl) {
+          const vObs = new MutationObserver((mutations) => {
+            for (const m of mutations)
+              for (const node of m.addedNodes)
+                if (node instanceof HTMLVideoElement) {
+                  node.setAttribute('playsinline', 'true');
+                  node.setAttribute('webkit-playsinline', 'true');
+                  node.muted = true;
+                }
+          });
+          vObs.observe(readerEl, { childList: true, subtree: true });
+        }
+
         const html5QrCode = new Html5Qrcode("reader", {
           verbose: false,
           useBarCodeDetectorIfSupported: true,
@@ -100,6 +116,7 @@ export default function Scanner({
         );
         if (!isUnmounted.current) {
           setHasPermission(true);
+          setIsStarting(false);
           setTimeout(() => {
             const video = document.querySelector('#reader video') as HTMLVideoElement;
             if (video) {
@@ -113,7 +130,7 @@ export default function Scanner({
         }
       } catch (err) {
         console.error("Camera start error", err);
-        if (!isUnmounted.current) setHasPermission(false);
+        if (!isUnmounted.current) { setHasPermission(false); setIsStarting(false); }
       }
     };
     initScanner();
@@ -173,9 +190,27 @@ export default function Scanner({
       {/* Camera Feed */}
       <div className="absolute inset-0 w-full h-full bg-black overflow-hidden">
         <div id="reader" className="w-full h-full [&>canvas]:!opacity-0"></div>
+        {isStarting && hasPermission === null && (
+          <div className="absolute inset-0 flex items-center justify-center bg-slate-900 z-20">
+            <div className="flex flex-col items-center gap-3 text-white">
+              <div className="w-8 h-8 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+              <p className="text-sm text-white/70">Đang khởi động camera...</p>
+            </div>
+          </div>
+        )}
         {hasPermission === false && (
           <div className="absolute inset-0 flex items-center justify-center bg-slate-900 text-white p-6 text-center z-20">
-            <p>Không thể truy cập camera. Vui lòng cấp quyền camera.</p>
+            <div className="flex flex-col items-center gap-4 max-w-xs">
+              <div className="text-5xl">📷</div>
+              <p className="font-bold text-lg">Không thể mở camera</p>
+              <p className="text-sm text-white/60 leading-relaxed">Vào <strong>Cài đặt → Safari → Camera</strong> và cho phép truy cập, sau đó thử lại.</p>
+              <button
+                onClick={() => window.location.reload()}
+                className="bg-blue-600 text-white px-6 py-3 rounded-xl font-bold active:scale-95 transition-all"
+              >
+                🔄 Thử lại
+              </button>
+            </div>
           </div>
         )}
       </div>
