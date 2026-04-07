@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover"/>
+  <title>SPX Camera Scanner</title>
+  <style>
+    :root{--bg:#0a0e1a;--s1:#111827;--s2:#1f2937;--bd:#374151;--ac:#3b82f6;--ac2:#06b6d4;--ok:#10b981;--warn:#f59e0b;--err:#ef4444;--tx:#f1f5f9;--tx2:#94a3b8;--tx3:#64748b}
+    *{box-sizing:border-box;margin:0;padding:0}
+    html,body{height:100%;background:var(--bg);color:var(--tx);font-family:'Segoe UI',system-ui,sans-serif;overflow:hidden}
+    body{display:flex;flex-direction:column;height:100dvh}
+
+    header{flex-shrink:0;background:rgba(17,24,39,.97);border-bottom:1px solid var(--bd);padding:0 14px;height:52px;display:flex;align-items:center;justify-content:space-between}
+    .logo{display:flex;align-items:center;gap:9px}
+    .logo-icon{width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,var(--ac),var(--ac2));display:flex;align-items:center;justify-content:center;font-size:17px}
+    .logo-text{font-weight:800;font-size:15px}
+    .logo-sub{font-size:10px;color:var(--tx3)}
+    .hdr-right{display:flex;align-items:center;gap:8px}
+    .sdot{width:8px;height:8px;border-radius:50%;background:var(--tx3);transition:background .3s}
+    .sdot.ok{background:var(--ok);box-shadow:0 0 8px var(--ok);animation:pg 2s infinite}
+    .sdot.err{background:var(--err)}
+    @keyframes pg{0%,100%{opacity:1}50%{opacity:.5}}
+    .slabel{font-size:11px;color:var(--tx2);font-weight:600}
+    .sbtn{background:none;border:1px solid var(--bd);color:var(--tx3);cursor:pointer;padding:4px 8px;border-radius:6px;font-size:11px;transition:all .15s}
+    .sbtn:hover{color:var(--tx);border-color:var(--tx3)}
+
+    .main{flex:1;display:grid;grid-template-columns:1fr 320px;min-height:0}
+    @media(max-width:720px){.main{grid-template-columns:1fr;grid-template-rows:1fr auto}}
+
+    /* ── Camera ── */
+    .cam-wrap{position:relative;background:#000;overflow:hidden}
+    #camCanvas{width:100%;height:100%;object-fit:contain;display:block}
+    .fps-badge{position:absolute;top:10px;left:10px;background:rgba(0,0,0,.6);border:1px solid var(--bd);border-radius:6px;padding:3px 8px;font-size:11px;color:var(--tx2);font-family:monospace}
+    .cam-err{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(10,14,26,.9);gap:10px;opacity:0;pointer-events:none;transition:opacity .3s}
+    .cam-err.show{opacity:1}
+    .cam-err .icon{font-size:44px}
+    .cam-err p{color:var(--tx2);font-size:13px;text-align:center;max-width:240px}
+    .retry-badge{font-size:11px;color:var(--warn);margin-top:4px}
+
+    /* Scan overlay canvas */
+    #overlayCanvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+
+    /* Flash */
+    .flash{position:absolute;inset:0;background:rgba(16,185,129,.25);opacity:0;pointer-events:none;transition:opacity .08s}
+    .flash.show{opacity:1}
+
+    /* ── Sidebar ── */
+    .sidebar{background:var(--s1);border-left:1px solid var(--bd);display:flex;flex-direction:column;overflow:hidden}
+    @media(max-width:720px){.sidebar{border-left:none;border-top:1px solid var(--bd)}}
+
+    /* Current session */
+    .cur-card{padding:14px;border-bottom:1px solid var(--bd);flex-shrink:0}
+    .cur-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--tx3);margin-bottom:6px}
+    .cur-code{font-size:13px;font-family:monospace;font-weight:700;word-break:break-all;line-height:1.4;min-height:18px}
+    .cur-code.empty{color:var(--tx3);font-style:italic;font-family:inherit;font-weight:400;font-size:12px}
+    .cur-meta{display:flex;gap:6px;margin-top:7px;flex-wrap:wrap}
+    .chip{display:flex;align-items:center;gap:4px;background:var(--s2);border-radius:5px;padding:3px 7px;font-size:10px;color:var(--tx2);font-weight:600}
+    .chip.ok{color:var(--ok);background:rgba(16,185,129,.1)}
+    .chip.warn{color:var(--warn);background:rgba(245,158,11,.1)}
+    .bar-wrap{margin-top:8px}
+    .bar-bg{height:3px;background:var(--s2);border-radius:2px;overflow:hidden}
+    .bar{height:100%;background:var(--ok);transition:width 1s linear,background 1s;border-radius:2px}
+    .bar.w{background:var(--warn)}.bar.d{background:var(--err)}
+    .finish-btn{margin-top:9px;width:100%;background:var(--ac);color:#fff;border:none;border-radius:9px;padding:9px;font-weight:700;font-size:12px;cursor:pointer;transition:all .15s;display:flex;align-items:center;justify-content:center;gap:5px}
+    .finish-btn:active{transform:scale(.97);background:#2563eb}
+    .finish-btn:disabled{background:var(--s2);color:var(--tx3);cursor:not-allowed;transform:none}
+
+    /* Cooldown badge */
+    .cooldown-badge{margin-top:6px;font-size:10px;color:var(--warn);background:rgba(245,158,11,.1);border-radius:5px;padding:3px 8px;display:none;text-align:center}
+    .cooldown-badge.show{display:block}
+
+    /* Stats */
+    .stats{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--bd);border-bottom:1px solid var(--bd);flex-shrink:0}
+    .stat{background:var(--s1);padding:10px 12px}
+    .stat-v{font-size:20px;font-weight:800;color:var(--tx);line-height:1}
+    .stat-v.ac{color:var(--ac)}
+    .stat-l{font-size:9px;color:var(--tx3);margin-top:2px;font-weight:700;text-transform:uppercase;letter-spacing:.4px}
+
+    /* List */
+    .list-hdr{padding:10px 14px 6px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--tx3);flex-shrink:0}
+    .list{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:5px;padding:0 10px 10px;touch-action:pan-y}
+    .list::-webkit-scrollbar{width:3px}
+    .list::-webkit-scrollbar-thumb{background:var(--bd);border-radius:2px}
+    .item{background:var(--s2);border-radius:9px;padding:9px 11px;border:1px solid var(--bd);animation:sli .25s ease-out}
+    .item.new{border-color:var(--ok);background:rgba(16,185,129,.07)}
+    @keyframes sli{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}}
+    .item-code{font-size:11px;font-family:monospace;font-weight:700;color:var(--tx);word-break:break-all}
+    .item-meta{display:flex;justify-content:space-between;align-items:center;margin-top:3px}
+    .item-time{font-size:9px;color:var(--tx3)}
+    .item-dur{font-size:9px;color:var(--ac2);font-weight:700}
+    .empty-list{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;color:var(--tx3);font-size:12px;padding:20px}
+    .empty-list .icon{font-size:32px;opacity:.35}
+
+    /* Toast */
+    #toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:var(--ok);color:#fff;border-radius:10px;padding:9px 18px;font-weight:700;font-size:12px;box-shadow:0 6px 24px rgba(16,185,129,.4);opacity:0;transition:opacity .2s;white-space:nowrap;z-index:200;pointer-events:none}
+    #toast.show{opacity:1}
+    #toast.err{background:var(--err);box-shadow:0 6px 24px rgba(239,68,68,.4)}
+    #toast.warn{background:var(--warn);box-shadow:0 6px 24px rgba(245,158,11,.4)}
+
+    /* Settings overlay */
+    .ov{position:fixed;inset:0;background:rgba(0,0,0,.75);display:flex;align-items:center;justify-content:center;z-index:300;padding:16px;opacity:0;pointer-events:none;transition:opacity .2s}
+    .ov.show{opacity:1;pointer-events:auto}
+    .modal{background:var(--s1);border:1px solid var(--bd);border-radius:14px;padding:20px;width:100%;max-width:340px;transform:scale(.95);transition:transform .2s}
+    .ov.show .modal{transform:scale(1)}
+    .modal h2{font-size:16px;font-weight:800;margin-bottom:14px}
+    .modal label{display:block;font-size:10px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px;margin-top:10px}
+    .modal input,.modal select{width:100%;background:var(--s2);border:1px solid var(--bd);color:var(--tx);border-radius:7px;padding:9px 10px;font-size:12px;outline:none}
+    .modal input:focus{border-color:var(--ac)}
+    .mbtns{display:flex;gap:7px;margin-top:16px}
+    .btn-p{flex:1;background:var(--ac);color:#fff;border:none;border-radius:8px;padding:10px;font-weight:700;cursor:pointer;font-size:12px}
+    .btn-s{background:var(--s2);color:var(--tx2);border:none;border-radius:8px;padding:10px;font-weight:700;cursor:pointer;font-size:12px}
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">📦</div>
+    <div>
+      <div class="logo-text">SPX Camera Scanner</div>
+      <div class="logo-sub">Dahua → Firebase</div>
+    </div>
+  </div>
+  <div class="hdr-right">
+    <div class="sdot" id="sdot"></div>
+    <span class="slabel" id="slabel">Đang kết nối...</span>
+    <button class="sbtn" onclick="openSettings()">⚙️ Cài đặt</button>
+  </div>
+</header>
+
+<div class="main">
+  <!-- Camera -->
+  <div class="cam-wrap">
+    <canvas id="camCanvas"></canvas>
+    <canvas id="overlayCanvas"></canvas>
+    <div class="fps-badge" id="fpsBadge">-- fps</div>
+    <div class="flash" id="flash"></div>
+    <div class="cam-err" id="camErr">
+      <div class="icon">📷</div>
+      <p>Không kết nối được camera. Kiểm tra server đang chạy và camera online.</p>
+      <div class="retry-badge" id="retryBadge"></div>
+    </div>
+  </div>
+
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="cur-card">
+      <div class="cur-lbl">Đơn Đang Đóng Gói</div>
+      <div class="cur-code empty" id="curCode">Chưa có đơn nào...</div>
+      <div class="cur-meta" id="curMeta" style="display:none">
+        <div class="chip ok">🟢 <span id="elapsedLbl">0:00</span></div>
+        <div class="chip warn">⏳ <span id="timeoutLbl">--</span></div>
+      </div>
+      <div class="bar-wrap" id="barWrap" style="display:none">
+        <div class="bar-bg"><div class="bar" id="bar"></div></div>
+      </div>
+      <div class="cooldown-badge" id="cooldownBadge">⏱ Trùng mã — bỏ qua</div>
+      <button class="finish-btn" id="finBtn" onclick="manualFinish()" disabled>✅ Kết Thúc Thủ Công</button>
+    </div>
+
+    <div class="stats">
+      <div class="stat"><div class="stat-v ac" id="todayCnt">0</div><div class="stat-l">Hôm nay</div></div>
+      <div class="stat"><div class="stat-v" id="sessCnt">0</div><div class="stat-l">Phiên này</div></div>
+    </div>
+
+    <div class="list-hdr">Đơn vừa quét</div>
+    <div class="list" id="list">
+      <div class="empty-list"><div class="icon">📋</div><span>Chưa có đơn nào</span></div>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<!-- Settings -->
+<div class="ov" id="settingsOv">
+  <div class="modal">
+    <h2>⚙️ Cài đặt</h2>
+    <label>Tên nhân viên</label>
+    <input id="cfgEmp" type="text" placeholder="VD: Tuấn"/>
+    <label>Thời gian tự kết thúc (phút)</label>
+    <input id="cfgTO" type="number" min="1" max="60" value="10"/>
+    <label>Cooldown chống trùng (giây)</label>
+    <input id="cfgCD" type="number" min="3" max="60" value="8"/>
+    <label>Server URL</label>
+    <input id="cfgSrv" type="text" placeholder="http://localhost:8181"/>
+    <div class="mbtns">
+      <button class="btn-s" onclick="closeSettings()">Hủy</button>
+      <button class="btn-p" onclick="saveSettings()">💾 Lưu</button>
+    </div>
+  </div>
+</div>
+
+<!-- Firebase -->
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+import { getFirestore, doc, setDoc, query, collection, orderBy, limit, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+
+const FB = {
+  apiKey:"AIzaSyA63WaG7EPrBLAy3NwbDDdQ_6UWhrgPVYg",
+  authDomain:"gen-lang-client-0145585769.firebaseapp.com",
+  projectId:"gen-lang-client-0145585769",
+  storageBucket:"gen-lang-client-0145585769.firebasestorage.app",
+  messagingSenderId:"64485231751",
+  appId:"1:64485231751:web:5b4583092fbfbc2c0c3c22",
+  databaseId:"ai-studio-10923fa6-d0fa-41e5-8d9d-bb42a84d3832"
+};
+const db = getFirestore(initializeApp(FB));
+
+// ── Config ──────────────────────────────────────────
+let cfg = {
+  emp: localStorage.getItem('cs_emp') || 'Camera Dahua',
+  timeout: +(localStorage.getItem('cs_to') || 10),
+  cooldown: +(localStorage.getItem('cs_cd') || 8),
+  server: localStorage.getItem('cs_srv') || 'http://localhost:8181',
+};
+window.openSettings = () => {
+  document.getElementById('cfgEmp').value = cfg.emp;
+  document.getElementById('cfgTO').value = cfg.timeout;
+  document.getElementById('cfgCD').value = cfg.cooldown;
+  document.getElementById('cfgSrv').value = cfg.server;
+  document.getElementById('settingsOv').classList.add('show');
+};
+window.closeSettings = () => document.getElementById('settingsOv').classList.remove('show');
+window.saveSettings = () => {
+  cfg.emp = document.getElementById('cfgEmp').value.trim() || 'Camera Dahua';
+  cfg.timeout = +(document.getElementById('cfgTO').value) || 10;
+  cfg.cooldown = +(document.getElementById('cfgCD').value) || 8;
+  cfg.server = document.getElementById('cfgSrv').value.trim() || 'http://localhost:8181';
+  localStorage.setItem('cs_emp', cfg.emp);
+  localStorage.setItem('cs_to', cfg.timeout);
+  localStorage.setItem('cs_cd', cfg.cooldown);
+  localStorage.setItem('cs_srv', cfg.server);
+  closeSettings();
+  showToast('✅ Đã lưu!');
+};
+
+// ── Audio ────────────────────────────────────────────
+function beep(success = true) {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    [[880, 0, .15], [success ? 1320 : 440, .1, .3]].forEach(([f, d, e]) => {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.connect(g); g.connect(ctx.destination);
+      o.type = 'sine'; o.frequency.value = f;
+      g.gain.setValueAtTime(.35, ctx.currentTime + d);
+      g.gain.exponentialRampToValueAtTime(.001, ctx.currentTime + e);
+      o.start(ctx.currentTime + d); o.stop(ctx.currentTime + e);
+    });
+    setTimeout(() => ctx.close(), 600);
+  } catch {}
+}
+
+// ── Toast ─────────────────────────────────────────────
+let tTimer;
+function showToast(msg, type='') {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.className = 'show' + (type ? ' '+type : '');
+  clearTimeout(tTimer); tTimer = setTimeout(() => el.classList.remove('show'), 2500);
+}
+
+// ── Canvas refs ───────────────────────────────────────
+const camCanvas = document.getElementById('camCanvas');
+const camCtx = camCanvas.getContext('2d');
+const ovCanvas = document.getElementById('overlayCanvas');
+const ovCtx = ovCanvas.getContext('2d');
+
+function resizeCanvases(w, h) {
+  camCanvas.width = w; camCanvas.height = h;
+  ovCanvas.width = w; ovCanvas.height = h;
+}
+
+// ── Session state ─────────────────────────────────────
+let session = null;
+let sessCnt = 0, todayCnt = 0;
+let recentScans = [];
+let uiTimer = null;
+// Cooldown: track last barcode + time
+let lastBarcode = null, lastBarcodeTime = 0;
+// Overlay barcode rectangle
+let lastDetect = null; // {x,y,w,h,code}
+let detectFade = 0;
+
+function updateUI() {
+  const cEl = document.getElementById('curCode');
+  const mEl = document.getElementById('curMeta');
+  const bwEl = document.getElementById('barWrap');
+  const fb = document.getElementById('finBtn');
+  if (!session) {
+    cEl.className = 'cur-code empty'; cEl.textContent = 'Chưa có đơn nào...';
+    mEl.style.display = 'none'; bwEl.style.display = 'none'; fb.disabled = true; return;
+  }
+  cEl.className = 'cur-code'; cEl.textContent = session.code;
+  mEl.style.display = 'flex'; bwEl.style.display = 'block'; fb.disabled = false;
+  const elapsed = Math.floor((Date.now() - session.startTime) / 1000);
+  const toSec = cfg.timeout * 60;
+  const rem = Math.max(0, toSec - elapsed);
+  const pct = (rem / toSec) * 100;
+  const fmt = s => `${Math.floor(s/60)}:${(s%60).toString().padStart(2,'0')}`;
+  document.getElementById('elapsedLbl').textContent = fmt(elapsed);
+  document.getElementById('timeoutLbl').textContent = `còn ${fmt(rem)}`;
+  const bar = document.getElementById('bar');
+  bar.style.width = pct + '%';
+  bar.className = 'bar' + (pct < 20 ? ' d' : pct < 40 ? ' w' : '');
+}
+
+// ── Firebase save ─────────────────────────────────────
+async function saveToFirebase(s, autoFinished) {
+  const r = { id: s.id, code: s.code, scanTime: s.startTime, finishTime: Date.now(), autoFinished, scannedBy: cfg.emp, scannedByUid: 'dahua-camera' };
+  try { await setDoc(doc(db, 'scans', r.id), r); } catch(e) { showToast('⚠️ Lỗi Firebase!','err'); }
+  return r;
+}
+
+// ── Session flow ──────────────────────────────────────
+async function startSession(code) {
+  if (session) await endSession(false);
+  session = { id: crypto.randomUUID(), code, startTime: Date.now(), lastSeen: Date.now() };
+  sessCnt++;
+  document.getElementById('sessCnt').textContent = sessCnt;
+  clearInterval(uiTimer); uiTimer = setInterval(updateUI, 1000);
+  beep(true);
+  showToast(`📦 ${code}`);
+  const f = document.getElementById('flash');
+  f.classList.add('show'); setTimeout(() => f.classList.remove('show'), 280);
+}
+async function endSession(auto) {
+  if (!session) return;
+  const dur = Math.round((Date.now() - session.startTime) / 1000);
+  const r = await saveToFirebase(session, auto);
+  const m = Math.floor(dur/60), s = dur%60;
+  recentScans.unshift({ code: r.code, time: new Date(r.scanTime).toLocaleTimeString('vi-VN',{hour:'2-digit',minute:'2-digit',second:'2-digit'}), dur: `${m>0?m+'p ':''}${s}s` });
+  renderList();
+  todayCnt++; document.getElementById('todayCnt').textContent = todayCnt;
+  showToast(auto ? `⏰ Tự kết thúc: ${r.code}` : `✅ Xong: ${r.code}`);
+  session = null; clearInterval(uiTimer); updateUI();
+}
+window.manualFinish = () => endSession(false);
+
+// Auto-timeout
+setInterval(() => {
+  if (!session) return;
+  if ((Date.now() - session.lastSeen) / 1000 >= cfg.timeout * 60) endSession(true);
+}, 5000);
+
+// ── Recent list ───────────────────────────────────────
+function renderList() {
+  const el = document.getElementById('list');
+  if (!recentScans.length) {
+    el.innerHTML = '<div class="empty-list"><div class="icon">📋</div><span>Chưa có đơn nào</span></div>'; return;
+  }
+  el.innerHTML = recentScans.slice(0,25).map((s,i) => `
+    <div class="item ${i===0?'new':''}">
+      <div class="item-code">${s.code}</div>
+      <div class="item-meta"><span class="item-time">🕐 ${s.time}</span><span class="item-dur">⏱ ${s.dur}</span></div>
+    </div>`).join('');
+}
+
+// ── Firebase live history (last 30 today) ─────────────
+try {
+  const q = query(collection(db,'scans'), orderBy('scanTime','desc'), limit(30));
+  onSnapshot(q, snap => {
+    const today = new Date(); today.setHours(0,0,0,0);
+    let cnt = 0;
+    snap.forEach(d => { const r = d.data(); if (r.finishTime >= today.getTime()) cnt++; });
+    todayCnt = cnt; document.getElementById('todayCnt').textContent = cnt;
+  });
+} catch {}
+
+// ── BarcodeDetector ───────────────────────────────────
+let detector = null;
+(async () => {
+  if ('BarcodeDetector' in window) {
+    detector = new BarcodeDetector({ formats: ['qr_code','code_128','code_39','ean_13','ean_8','data_matrix'] });
+  } else { showToast('⚠️ Dùng Chrome để quét mã!','warn'); }
+})();
+
+// ── Camera polling ────────────────────────────────────
+let errStreak = 0, retryDelay = 1000, frameCount = 0, lastFpsTick = Date.now();
+
+async function fetchFrame() {
+  try {
+    const res = await fetch(`${cfg.server}/snapshot?t=${Date.now()}`, { signal: AbortSignal.timeout(3500) });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const blob = await res.blob();
+    errStreak = 0; retryDelay = 1000; setOnline(true);
+
+    return new Promise(resolve => {
+      const img = new Image();
+      img.onload = async () => {
+        // Draw to camera canvas
+        const cw = camCanvas.parentElement.clientWidth;
+        const ch = camCanvas.parentElement.clientHeight;
+        if (camCanvas.width !== cw || camCanvas.height !== ch) resizeCanvases(cw, ch);
+
+        // Letterbox fit
+        const scale = Math.min(cw / img.width, ch / img.height);
+        const dw = img.width * scale, dh = img.height * scale;
+        const dx = (cw - dw) / 2, dy = (ch - dh) / 2;
+        camCtx.clearRect(0, 0, cw, ch);
+        camCtx.drawImage(img, dx, dy, dw, dh);
+
+        // BarcodeDetector — run on full img for accuracy, use ROI hint
+        if (detector) {
+          try {
+            const barcodes = await detector.detect(img);
+            if (barcodes.length > 0) {
+              const bc = barcodes[0];
+              const code = bc.rawValue.trim();
+              if (code.length > 3) {
+                // Map barcode rect to canvas coords
+                const { x, y, width, height } = bc.boundingBox;
+                lastDetect = { x: dx + x*scale, y: dy + y*scale, w: width*scale, h: height*scale, code };
+                detectFade = 60; // frames to show overlay
+
+                const now = Date.now();
+                const sameCooldown = (code === lastBarcode) && ((now - lastBarcodeTime) / 1000 < cfg.cooldown);
+                if (sameCooldown) {
+                  // Show cooldown badge
+                  document.getElementById('cooldownBadge').classList.add('show');
+                  setTimeout(() => document.getElementById('cooldownBadge').classList.remove('show'), 1500);
+                  if (session?.code === code) session.lastSeen = now;
+                } else {
+                  lastBarcode = code; lastBarcodeTime = now;
+                  document.getElementById('cooldownBadge').classList.remove('show');
+                  if (!session || session.code !== code) await startSession(code);
+                  else session.lastSeen = now;
+                }
+              }
+            }
+          } catch {}
+        }
+
+        // Draw overlay
+        ovCtx.clearRect(0, 0, cw, ch);
+        if (lastDetect && detectFade > 0) {
+          const alpha = Math.min(1, detectFade / 20);
+          ovCtx.save();
+          ovCtx.strokeStyle = `rgba(16,185,129,${alpha})`;
+          ovCtx.lineWidth = 3;
+          ovCtx.shadowColor = '#10b981';
+          ovCtx.shadowBlur = 10;
+          ovCtx.strokeRect(lastDetect.x, lastDetect.y, lastDetect.w, lastDetect.h);
+          // Label
+          ovCtx.fillStyle = `rgba(16,185,129,${alpha})`;
+          ovCtx.font = 'bold 13px monospace';
+          ovCtx.fillText(lastDetect.code, lastDetect.x, lastDetect.y - 6);
+          ovCtx.restore();
+          detectFade--;
+        } else {
+          // Draw scan guide frame
+          const fw = Math.min(260, cw * .55), fh = fw;
+          const fx = (cw - fw) / 2, fy = (ch - fh) / 2;
+          ovCtx.save();
+          ovCtx.strokeStyle = 'rgba(59,130,246,.5)';
+          ovCtx.lineWidth = 2;
+          const cs = 24;
+          [[fx,fy,1,1],[fx+fw,fy,-1,1],[fx,fy+fh,1,-1],[fx+fw,fy+fh,-1,-1]].forEach(([x,y,sx,sy]) => {
+            ovCtx.beginPath(); ovCtx.moveTo(x,y); ovCtx.lineTo(x+sx*cs,y); ovCtx.moveTo(x,y); ovCtx.lineTo(x,y+sy*cs); ovCtx.stroke();
+          });
+          ovCtx.restore();
+        }
+
+        // FPS
+        frameCount++;
+        const now2 = Date.now();
+        if (now2 - lastFpsTick >= 2000) {
+          document.getElementById('fpsBadge').textContent = (frameCount / ((now2-lastFpsTick)/1000)).toFixed(1) + ' fps';
+          frameCount = 0; lastFpsTick = now2;
+        }
+        URL.revokeObjectURL(img.src);
+        resolve();
+      };
+      img.onerror = () => resolve();
+      img.src = URL.createObjectURL(blob);
+    });
+  } catch(e) {
+    errStreak++;
+    retryDelay = Math.min(8000, retryDelay * 1.5);
+    document.getElementById('retryBadge').textContent = `Thử lại sau ${(retryDelay/1000).toFixed(1)}s...`;
+    if (errStreak >= 2) setOnline(false);
+    await new Promise(r => setTimeout(r, retryDelay));
+  }
+}
+
+function setOnline(ok) {
+  document.getElementById('sdot').className = 'sdot ' + (ok ? 'ok' : 'err');
+  document.getElementById('slabel').textContent = ok ? 'Camera đang chạy' : 'Mất kết nối camera';
+  const err = document.getElementById('camErr');
+  err.className = 'cam-err' + (ok ? '' : ' show');
+}
+
+// ── Wake Lock — giữ màn hình sáng ────────────────────
+let _wakeLock = null;
+async function acquireWakeLock() {
+  if (!('wakeLock' in navigator)) return;
+  try {
+    _wakeLock = await navigator.wakeLock.request('screen');
+    const lbl = document.getElementById('slabel');
+    if (lbl) lbl.title = '💡 Màn hình luôn sáng';
+  } catch (e) { console.warn('WakeLock:', e.message); }
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') acquireWakeLock();
+});
+acquireWakeLock();
+
+// ── Main loop ─────────────────────────────────────────
+(async () => {
+  while (true) {
+    await fetchFrame();
+    await new Promise(r => setTimeout(r, 520)); // ~2fps target
+  }
+})();
+</script>
+</body>
+</html>

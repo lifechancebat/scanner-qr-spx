@@ -59,6 +59,20 @@ export default function Scanner({
       await new Promise(resolve => setTimeout(resolve, 300));
       if (isUnmounted.current) return;
       try {
+        // iOS PWA standalone fix: phải gọi getUserMedia trực tiếp trước
+        // để trigger permission dialog, sau đó mới dùng Html5Qrcode
+        try {
+          const testStream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: 'environment' }
+          });
+          testStream.getTracks().forEach(t => t.stop());
+        } catch (permErr) {
+          console.warn('Camera permission pre-check failed:', permErr);
+          if (!isUnmounted.current) setHasPermission(false);
+          return;
+        }
+        if (isUnmounted.current) return;
+
         const html5QrCode = new Html5Qrcode("reader", {
           verbose: false,
           useBarCodeDetectorIfSupported: true,
@@ -168,19 +182,24 @@ export default function Scanner({
 
       {/* Scanner Overlay */}
       <div className="absolute inset-0 z-10 pointer-events-none flex flex-col">
-        <div className="flex-1 bg-black/45 w-full"></div>
-        <div className="flex w-full h-[280px] shrink-0">
-          <div className="flex-1 bg-black/45 h-full"></div>
-          <div className="w-[280px] h-full relative border-2 border-blue-500/40 rounded-xl">
-            <div className="absolute -top-1 -left-1 w-8 h-8 border-t-4 border-l-4 border-blue-600 rounded-tl-lg"></div>
-            <div className="absolute -top-1 -right-1 w-8 h-8 border-t-4 border-r-4 border-blue-600 rounded-tr-lg"></div>
-            <div className="absolute -bottom-1 -left-1 w-8 h-8 border-b-4 border-l-4 border-blue-600 rounded-bl-lg"></div>
-            <div className="absolute -bottom-1 -right-1 w-8 h-8 border-b-4 border-r-4 border-blue-600 rounded-br-lg"></div>
-            <div className="absolute top-0 left-0 w-full h-0.5 bg-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.8)] animate-scan"></div>
+        <div className="flex-1 bg-black/65 w-full"></div>
+        <div className="flex w-full h-[300px] shrink-0">
+          <div className="flex-1 bg-black/65 h-full"></div>
+          <div className="w-[300px] h-full relative border-2 border-blue-400 rounded-xl shadow-[0_0_0_2px_rgba(96,165,250,0.4)]">
+            {/* Góc trên trái */}
+            <div className="absolute -top-[3px] -left-[3px] w-10 h-10 border-t-[5px] border-l-[5px] border-blue-400 rounded-tl-xl"></div>
+            {/* Góc trên phải */}
+            <div className="absolute -top-[3px] -right-[3px] w-10 h-10 border-t-[5px] border-r-[5px] border-blue-400 rounded-tr-xl"></div>
+            {/* Góc dưới trái */}
+            <div className="absolute -bottom-[3px] -left-[3px] w-10 h-10 border-b-[5px] border-l-[5px] border-blue-400 rounded-bl-xl"></div>
+            {/* Góc dưới phải */}
+            <div className="absolute -bottom-[3px] -right-[3px] w-10 h-10 border-b-[5px] border-r-[5px] border-blue-400 rounded-br-xl"></div>
+            {/* Đường scan */}
+            <div className="absolute top-0 left-0 w-full h-[3px] bg-blue-400 shadow-[0_0_20px_6px_rgba(96,165,250,0.9)] animate-scan"></div>
           </div>
-          <div className="flex-1 bg-black/45 h-full"></div>
+          <div className="flex-1 bg-black/65 h-full"></div>
         </div>
-        <div className="flex-1 bg-black/45 w-full"></div>
+        <div className="flex-1 bg-black/65 w-full"></div>
       </div>
 
       {/* Prompt */}

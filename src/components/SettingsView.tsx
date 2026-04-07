@@ -14,6 +14,8 @@ interface CameraConfig {
   username: string;
   password: string;
   urlFormat: '1' | '2' | '3';
+  toolUrl?: string;
+  tabletUrl?: string;
 }
 
 export default function SettingsView({ onBack, darkMode, onToggleDarkMode, onLogout }: SettingsViewProps) {
@@ -230,6 +232,23 @@ export default function SettingsView({ onBack, darkMode, onToggleDarkMode, onLog
                   {showCamPass ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
               </div>
+            </div>
+
+            {/* Tablet Server URL */}
+            <div>
+              <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1 block flex items-center justify-between">
+                <span>📱 Địa chỉ Tablet Scanner</span>
+                <span className="text-[9px] text-blue-600 bg-blue-50 dark:bg-blue-900/30 px-1.5 py-0.5 rounded">Tùy chọn</span>
+              </label>
+              <input
+                type="text" placeholder="http://192.168.1.x:8181"
+                value={cameraConfig.tabletUrl || ''}
+                onChange={e => setCameraConfig(p => ({ ...p, tabletUrl: e.target.value }))}
+                className="w-full bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl py-2.5 px-3 text-sm font-mono focus:ring-2 focus:ring-teal-500 outline-none dark:text-white"
+              />
+              <p className="text-[10px] text-slate-400 mt-1">
+                IP của tablet trong mạng WiFi (VD: http://192.168.1.50:8181) → bật nút ⬇ Tải video trực tiếp về iPhone.
+              </p>
             </div>
 
             {/* Tool PC Server */}

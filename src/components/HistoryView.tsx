@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import React, { useState, useRef } from 'react';
 import { ArrowLeft, Search, Package, Clock, Calendar, User, Download, Trash2, X, Play, Copy, Video, AlertCircle, Loader2, MessageSquare, Check, FileSpreadsheet } from 'lucide-react';
 import { format, isSameDay } from 'date-fns';
 import * as XLSX from 'xlsx';
@@ -12,7 +12,7 @@ interface HistoryViewProps {
 }
 
 interface CameraConfig {
-  ip: string; port: string; username: string; password: string; urlFormat: '1' | '2' | '3'; toolUrl?: string;
+  ip: string; port: string; username: string; password: string; urlFormat: '1' | '2' | '3'; toolUrl?: string; tabletUrl?: string;
 }
 
 // Chuyển timestamp (ms) → Dahua RTSP format: YYYY_MM_DD_HH_MM_SS (LOCAL time)
@@ -155,7 +155,7 @@ export default function HistoryView({ history, onBack, onDelete, onUpdateNote }:
   };
 
   return (
-    <div className="flex-1 bg-slate-50 dark:bg-slate-900 overflow-y-auto pb-24 flex flex-col">
+    <div className="flex-1 bg-slate-50 dark:bg-slate-900 overflow-y-auto pb-24 flex flex-col" style={{ touchAction: 'pan-y', WebkitOverflowScrolling: 'touch', overscrollBehavior: 'none', maxWidth: '100%' } as React.CSSProperties}>
       <header className="sticky top-0 z-10 bg-slate-50/95 dark:bg-slate-900/95 backdrop-blur-sm flex items-center justify-between px-4 h-16 shrink-0 border-b border-slate-100 dark:border-slate-800">
         <div className="flex items-center gap-4">
           <button onClick={onBack} className="text-blue-600 active:scale-95 transition-transform">
@@ -324,7 +324,7 @@ export default function HistoryView({ history, onBack, onDelete, onUpdateNote }:
                           setNoteText(record.notes || '');
                           setTimeout(() => noteInputRef.current?.focus(), 50);
                         }}
-                        className={`flex items-center gap-1.5 text-[11px] w-full text-left rounded-xl px-3 py-2 transition-all active:scale-[0.98] ${
+                        className={`flex items-center gap-1.5 text-[11px] w-full text-left rounded-xl px-3 py-2 transition-all ${
                           record.notes
                             ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-700'
                             : 'bg-slate-50 dark:bg-slate-700 text-slate-400 dark:text-slate-500'
@@ -364,6 +364,34 @@ export default function HistoryView({ history, onBack, onDelete, onUpdateNote }:
                             </div>
                             <span className="text-[9px] opacity-80">Ghi Màn Hình</span>
                           </a>
+
+                          {/* Tablet download button */}
+                          {cameraConfig.tabletUrl && (
+                            <a
+                              href={`${cameraConfig.tabletUrl.replace(/\/+$/, '')}/download?start=${record.scanTime}&end=${record.finishTime}&code=${encodeURIComponent(record.code)}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={() => {
+                                setDownloadingId(record.id);
+                                setTimeout(() => setDownloadingId(null), 60_000);
+                              }}
+                              className={`flex flex-col items-center justify-center gap-0.5 text-white py-2 rounded-xl active:scale-95 transition-all shadow-sm flex-1 ${
+                                isRecent
+                                  ? 'bg-slate-400 shadow-slate-400/20'
+                                  : downloadingId === record.id
+                                  ? 'bg-amber-500 shadow-amber-500/20'
+                                  : 'bg-blue-600 hover:bg-blue-700 shadow-blue-500/20'
+                              }`}
+                            >
+                              <div className="flex items-center gap-1.5 font-bold text-xs">
+                                {downloadingId === record.id ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+                                {isRecent ? '⏳ Chờ Ghi' : downloadingId === record.id ? 'Đang tải...' : '⬇ Tải Video'}
+                              </div>
+                              <span className="text-[9px] opacity-80">
+                                {downloadingId === record.id ? 'Mở Files khi xong' : 'Tablet → iPhone'}
+                              </span>
+                            </a>
+                          )}
 
                           {cameraConfig.toolUrl && (
                             <a

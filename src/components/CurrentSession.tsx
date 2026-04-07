@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { ArrowLeft, History, Package, Check, Clock, Mic, MicOff } from 'lucide-react';
+import { ArrowLeft, History, Package, Check, Clock } from 'lucide-react';
 import { ScanRecord } from '../types';
 
 interface CurrentSessionProps {
@@ -13,8 +13,6 @@ export default function CurrentSession({ scannedCode, onBack, onFinish, onHistor
   const [scanTime] = useState<number>(Date.now());
   const timeoutMinutes = parseInt(localStorage.getItem('session_timeout_minutes') || '10', 10);
   const [timeLeft, setTimeLeft] = useState<number>(timeoutMinutes * 60);
-  const [isListening, setIsListening] = useState(false);
-  const recognitionRef = useRef<any>(null);
   const onFinishRef = useRef(onFinish);
   const scannedCodeRef = useRef(scannedCode);
   const scanTimeRef = useRef(scanTime);
@@ -33,29 +31,7 @@ export default function CurrentSession({ scannedCode, onBack, onFinish, onHistor
     return () => clearInterval(timer);
   }, []);
 
-  useEffect(() => {
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (SpeechRecognition) {
-      const recognition = new SpeechRecognition();
-      recognition.continuous = true;
-      recognition.interimResults = false;
-      recognition.lang = 'vi-VN';
-      recognition.onstart = () => setIsListening(true);
-      recognition.onend = () => setIsListening(false);
-      recognition.onerror = (e: any) => console.error("Speech error", e);
-      recognition.onresult = (event: any) => {
-        const transcript = event.results[event.results.length - 1][0].transcript.toLowerCase();
-        if (transcript.includes('xong') || transcript.includes('kết thúc') || transcript.includes('hoàn thành')) {
-          handleFinish(false);
-        }
-      };
-      try { recognition.start(); recognitionRef.current = recognition; } catch {}
-      return () => { if (recognitionRef.current) recognitionRef.current.stop(); };
-    }
-  }, []);
-
   const handleFinish = useCallback((autoFinished: boolean = false) => {
-    if (recognitionRef.current) recognitionRef.current.stop();
     const record: ScanRecord = {
       id: crypto.randomUUID(), code: scannedCodeRef.current,
       scanTime: scanTimeRef.current, finishTime: Date.now(), autoFinished
@@ -109,32 +85,19 @@ export default function CurrentSession({ scannedCode, onBack, onFinish, onHistor
           </div>
         </div>
 
-        <div className="bg-blue-50 dark:bg-blue-900/20 rounded-2xl p-6 flex flex-col items-center justify-center mt-4 border border-blue-100 dark:border-blue-800">
-          <Package size={48} className="text-blue-400 mb-4" />
-          <p className="text-center text-slate-700 dark:text-slate-300 font-medium">
-            Vui lòng đóng gói đơn hàng. Nhấn "Kết Thúc" khi hoàn thành.
+        <div className="bg-blue-600 dark:bg-blue-500 rounded-2xl p-6 flex flex-col items-center justify-center mt-4 border-2 border-blue-400 dark:border-blue-300 shadow-lg shadow-blue-500/30">
+          <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center mb-4">
+            <Package size={36} className="text-white" />
+          </div>
+          <p className="text-center text-white font-bold text-lg leading-snug">
+            📦 Đặt đơn vào thùng
           </p>
-          <p className="text-center text-slate-500 dark:text-slate-400 text-sm mt-2">
-            Hệ thống sẽ tự động kết thúc sau 10 phút.
+          <p className="text-center text-blue-100 font-medium text-sm mt-2">
+            Nhấn <span className="text-white font-bold">"Kết Thúc"</span> khi đóng gói xong
           </p>
-        </div>
-
-        <div className="flex items-center justify-center gap-2 text-xs font-medium text-slate-500 dark:text-slate-400 bg-slate-200/50 dark:bg-slate-700/50 px-4 py-2 rounded-full mx-auto w-max">
-          {isListening ? (
-            <>
-              <div className="relative flex h-3 w-3">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
-              </div>
-              <Mic size={14} className="text-green-600" />
-              <span className="text-green-700 dark:text-green-400">Hãy nói "Xong" để kết thúc</span>
-            </>
-          ) : (
-            <>
-              <MicOff size={14} />
-              <span>Mic đang tắt</span>
-            </>
-          )}
+          <p className="text-center text-blue-200 text-xs mt-2">
+            Tự động kết thúc sau {timeoutMinutes} phút
+          </p>
         </div>
 
         <div className="mt-auto pt-6">
