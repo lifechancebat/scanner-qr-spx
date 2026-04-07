@@ -166,6 +166,7 @@ export default function App() {
     setUndoRecord(finalRecord);
     if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
     undoTimerRef.current = setTimeout(() => setUndoRecord(null), 8000);
+    setCurrentCode(null);
     setCurrentView('scanner');
   };
 
@@ -244,8 +245,8 @@ export default function App() {
             <DashboardView history={scanHistory} onBack={() => setCurrentView('scanner')} />
           </div>
         )}
-        {currentView === 'session' && currentCode && (
-          <div className="absolute inset-0 z-20 flex flex-col bg-slate-50 dark:bg-slate-900">
+        {currentCode && (
+          <div className={`absolute inset-0 z-20 flex flex-col bg-slate-50 dark:bg-slate-900${currentView === 'session' ? '' : ' hidden'}`}>
             <CurrentSession scannedCode={currentCode} onBack={() => setCurrentView('scanner')}
               onFinish={handleFinishSession} onHistory={() => setCurrentView('history')} />
           </div>
@@ -301,12 +302,24 @@ export default function App() {
             { view: 'history' as ViewState, icon: Truck, label: 'Lịch Sử' },
             { view: 'settings' as ViewState, icon: Settings, label: 'Cài Đặt' },
           ]).map(({ view, icon: Icon, label }) => (
-            <button key={view} onClick={() => setCurrentView(view)}
-              className={`flex flex-col items-center justify-center rounded-2xl px-4 py-2 active:scale-95 transition-all duration-200 ${currentView === view ? 'text-blue-600' : 'text-slate-400 dark:text-slate-500 hover:text-slate-600'}`}>
-              <div className={`p-1.5 rounded-xl mb-1 ${currentView === view ? 'bg-blue-50 dark:bg-blue-900/30' : 'bg-transparent'}`}>
-                <Icon size={22} strokeWidth={currentView === view ? 2.5 : 2} />
+            <button key={view}
+              onClick={() => {
+                if (view === 'scanner' && currentCode) setCurrentView('session');
+                else setCurrentView(view);
+              }}
+              className={`flex flex-col items-center justify-center rounded-2xl px-4 py-2 active:scale-95 transition-all duration-200 ${
+                (currentView === view || (view === 'scanner' && currentView === 'session'))
+                  ? 'text-blue-600' : 'text-slate-400 dark:text-slate-500 hover:text-slate-600'
+              }`}>
+              <div className={`p-1.5 rounded-xl mb-1 ${
+                (currentView === view || (view === 'scanner' && currentView === 'session'))
+                  ? 'bg-blue-50 dark:bg-blue-900/30' : 'bg-transparent'
+              }`}>
+                <Icon size={22} strokeWidth={(currentView === view || (view === 'scanner' && currentView === 'session')) ? 2.5 : 2} />
               </div>
-              <span className={`text-[10px] uppercase tracking-wider ${currentView === view ? 'font-bold' : 'font-semibold'}`}>{label}</span>
+              <span className={`text-[10px] uppercase tracking-wider ${
+                (currentView === view || (view === 'scanner' && currentView === 'session')) ? 'font-bold' : 'font-semibold'
+              }`}>{label}</span>
             </button>
           ))}
         </nav>
