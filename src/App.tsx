@@ -242,7 +242,7 @@ export default function App() {
 
         {currentView === 'dashboard' && (
           <div className="absolute inset-0 z-20 flex flex-col bg-slate-50 dark:bg-slate-900">
-            <DashboardView history={scanHistory} onBack={() => setCurrentView('scanner')} />
+            <DashboardView history={scanHistory} />
           </div>
         )}
         {currentCode && (

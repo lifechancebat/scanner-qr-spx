@@ -105,7 +105,7 @@ export default function Scanner({
               Html5QrcodeSupportedFormats.CODE_128,
               Html5QrcodeSupportedFormats.EAN_13,
             ]
-          },
+          } as any,
           (decodedText) => {
             if (!isUnmounted.current && html5QrCode.getState() === STATE_SCANNING) {
               try { html5QrCode.pause(false); } catch {}
@@ -117,16 +117,6 @@ export default function Scanner({
         if (!isUnmounted.current) {
           setHasPermission(true);
           setIsStarting(false);
-          setTimeout(() => {
-            const video = document.querySelector('#reader video') as HTMLVideoElement;
-            if (video) {
-              video.setAttribute('playsinline', 'true');
-              video.setAttribute('webkit-playsinline', 'true');
-              video.style.objectFit = 'cover';
-              video.style.width = '100%';
-              video.style.height = '100%';
-            }
-          }, 300);
         }
       } catch (err) {
         console.error("Camera start error", err);

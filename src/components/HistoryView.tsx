@@ -1,8 +1,8 @@
 import React, { useState, useRef } from 'react';
-import { ArrowLeft, Search, Package, Clock, Calendar, User, Download, Trash2, X, Play, Copy, Video, AlertCircle, Loader2, MessageSquare, Check, FileSpreadsheet } from 'lucide-react';
+import { ArrowLeft, Search, Package, Clock, Calendar, User, Download, Trash2, X, Play, Copy, AlertCircle, Loader2, MessageSquare, Check, FileSpreadsheet } from 'lucide-react';
 import { format, isSameDay } from 'date-fns';
 import * as XLSX from 'xlsx';
-import { ScanRecord } from '../types';
+import { ScanRecord, CameraConfig } from '../types';
 
 interface HistoryViewProps {
   history: ScanRecord[];
@@ -11,9 +11,6 @@ interface HistoryViewProps {
   onUpdateNote: (id: string, notes: string) => Promise<void>;
 }
 
-interface CameraConfig {
-  ip: string; port: string; username: string; password: string; urlFormat: '1' | '2' | '3'; toolUrl?: string; tabletUrl?: string;
-}
 
 // Chuyển timestamp (ms) → Dahua RTSP format: YYYY_MM_DD_HH_MM_SS (LOCAL time)
 const toLocalDahuaTime = (ts: number): string => {

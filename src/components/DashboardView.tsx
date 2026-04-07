@@ -6,10 +6,9 @@ import { isToday, getHours } from 'date-fns';
 
 interface DashboardViewProps {
   history: ScanRecord[];
-  onBack: () => void;
 }
 
-export default function DashboardView({ history, onBack }: DashboardViewProps) {
+export default function DashboardView({ history }: DashboardViewProps) {
   const stats = useMemo(() => {
     const todayRecords = history.filter(record => isToday(record.finishTime));
     const totalToday = todayRecords.length;
